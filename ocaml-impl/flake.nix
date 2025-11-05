@@ -23,9 +23,19 @@
             ocamlPackages.ocamlformat
             llvm_18
             ocamlPackages.llvm
+
+            # Runtime dependencies
+            zlib
+            gcc
           ];
 
           shellHook = ''
+            # Set up library paths for runtime
+            export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [
+              pkgs.zlib
+              pkgs.llvm_18.lib
+            ]}:$LD_LIBRARY_PATH"
+
             echo "Pascal-like compiler development environment"
             echo "OCaml version: $(ocaml -version)"
             echo "LLVM version: $(llvm-config --version)"

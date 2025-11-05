@@ -16,6 +16,28 @@ TEST_DIR="test_output"
 # Create temporary test directory
 mkdir -p "$TEST_DIR"
 
+# Check if we're in a nix environment (or commands are available)
+if ! command -v dune &> /dev/null || ! command -v llc &> /dev/null; then
+    echo -e "${RED}ERROR: Required tools not found${NC}"
+    echo ""
+    echo "Please ensure you're in the Nix environment:"
+    echo "  cd ocaml-impl && nix develop"
+    echo "Or use direnv:"
+    echo "  cd ocaml-impl && direnv allow"
+    exit 1
+fi
+
+# Build the compiler first
+echo -n "Building compiler... "
+if dune build > "$TEST_DIR/build.log" 2>&1; then
+    echo -e "${GREEN}OK${NC}"
+else
+    echo -e "${RED}FAILED${NC}"
+    cat "$TEST_DIR/build.log"
+    exit 1
+fi
+echo ""
+
 # Function to run a test
 run_test() {
     local test_name="$1"
@@ -63,18 +85,18 @@ echo "========================================="
 echo ""
 
 # Run tests
-run_test "simple_var" "examples/test2.pas" "42"
-run_test "fibonacci_recursive" "examples/fibonacci.pas" "5"
-run_test "factorial_recursive" "examples/factorial_demo.pas" "120"
-run_test "loops_for" "examples/loops_test.pas" "55"
-run_test "arithmetic_expr" "examples/arithmetic_test.pas" "20"
-run_test "record_local" "examples/record_local.pas" "30"
-run_test "record_param" "examples/record_param.pas" "40"
-run_test "record_return" "examples/record_return.pas" "100
+run_test "simple_var" "../examples/test2.pas" "42"
+run_test "fibonacci_recursive" "../examples/fibonacci.pas" "5"
+run_test "factorial_recursive" "../examples/factorial_demo.pas" "120"
+run_test "loops_for" "../examples/loops_test.pas" "55"
+run_test "arithmetic_expr" "../examples/arithmetic_test.pas" "20"
+run_test "record_local" "../examples/record_local.pas" "30"
+run_test "record_param" "../examples/record_param.pas" "40"
+run_test "record_return" "../examples/record_return.pas" "100
 200"
-run_test "inline_var" "examples/inline_var.pas" "30
+run_test "inline_var" "../examples/inline_var.pas" "30
 35"
-run_test "inline_val" "examples/inline_val.pas" "30"
+run_test "inline_val" "../examples/inline_val.pas" "30"
 
 echo ""
 echo "========================================="
