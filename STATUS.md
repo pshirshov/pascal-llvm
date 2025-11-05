@@ -113,7 +113,7 @@ Rust implementation: `rust-impl/src/codegen.rs` (850 lines)
 - `STATUS.md` - This file
 
 ### Updated Files
-- `ocaml-impl/flake.nix` - Added zlib, LD_LIBRARY_PATH
+- `ocaml-impl/flake.nix` - Added LLVM dependencies (libffi, libxml2, ncurses, zlib), library paths
 - `rust-impl/flake.nix` - Added LLVM dependencies (libffi, libxml2, ncurses, zlib), library paths
 - `ocaml-impl/test.sh` - Added build step, tool checks
 - `rust-impl/test.sh` - Created with graceful degradation

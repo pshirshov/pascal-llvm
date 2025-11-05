@@ -24,16 +24,22 @@
             llvm_18
             ocamlPackages.llvm
 
-            # Runtime dependencies
+            # Runtime and linking dependencies
             zlib
+            libffi
+            libxml2
+            ncurses
             gcc
           ];
 
           shellHook = ''
-            # Set up library paths for runtime
+            # Set up library paths for runtime and linking
             export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [
               pkgs.zlib
               pkgs.llvm_18.lib
+              pkgs.libffi
+              pkgs.libxml2
+              pkgs.ncurses
             ]}:$LD_LIBRARY_PATH"
 
             echo "Pascal-like compiler development environment"
