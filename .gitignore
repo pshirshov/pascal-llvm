@@ -5,6 +5,7 @@
 *.a
 *.so
 *.dylib
+*/test_output/*
 
 # Executables
 /arithmetic_test

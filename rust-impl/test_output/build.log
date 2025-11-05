@@ -1,10 +1,1 @@
-    Updating crates.io index
-error: failed to select a version for `inkwell`.
-    ... required by package `pascalc v0.1.0 (/home/pavel/work/safe/drafts/llvm-test/rust-impl)`
-versions that meet the requirements `^0.4` are: 0.4.0
-
-package `pascalc` depends on `inkwell` with feature `llvm18-0` but `inkwell` does not have that feature.
- package `inkwell` does have feature `llvm10-0`
-
-
-failed to select a version for `inkwell` which could resolve this conflict
+    Finished `release` profile [optimized] target(s) in 0.03s

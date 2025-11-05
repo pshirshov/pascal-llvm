@@ -360,7 +360,7 @@ impl Parser {
         self.expect(Token::Assign)?;
         let start = self.parse_expr()?;
 
-        let ascending = match self.current_token {
+        let _ascending = match self.current_token {
             Token::To => {
                 self.advance();
                 true

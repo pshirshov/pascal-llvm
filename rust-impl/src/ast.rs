@@ -2,7 +2,7 @@
 
 pub type Identifier = String;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeExpr {
     TInteger,
     TReal,
@@ -15,7 +15,7 @@ pub enum TypeExpr {
     TNamed(Identifier),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RecordField {
     pub field_name: Identifier,
     pub field_type: TypeExpr,

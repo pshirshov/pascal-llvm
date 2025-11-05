@@ -79,7 +79,7 @@ run_test() {
         return 1
     fi
 
-    if ! gcc "${test_name}.s" -o "$binary" 2>> "$TEST_DIR/${test_name}.log"; then
+    if ! gcc -no-pie "${test_name}.s" -o "$binary" 2>> "$TEST_DIR/${test_name}.log"; then
         echo -e "${RED}FAILED${NC} (gcc error)"
         cat "$TEST_DIR/${test_name}.log"
         TESTS_FAILED=$((TESTS_FAILED + 1))

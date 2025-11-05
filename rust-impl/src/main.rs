@@ -1,5 +1,6 @@
 /// Pascal-like language compiler built with Rust and Inkwell (LLVM)
 mod ast;
+mod codegen;
 mod lexer;
 mod parser;
 mod types;
@@ -62,7 +63,21 @@ fn main() -> anyhow::Result<()> {
         anyhow::anyhow!("{}", e)
     })?;
 
-    // TODO: Code generation
-    eprintln!("Code generation not yet implemented");
-    std::process::exit(1);
+    // Code generation
+    let llvm_ir = codegen::generate_code(&program).map_err(|e| {
+        anyhow::anyhow!("Codegen error: {}", e)
+    })?;
+
+    // Determine output file
+    let output_path = args.output.unwrap_or_else(|| {
+        let mut path = args.input.clone();
+        path.set_extension("ll");
+        path
+    });
+
+    // Write LLVM IR to file
+    fs::write(&output_path, llvm_ir)?;
+    eprintln!("Generated LLVM IR: {}", output_path.display());
+
+    Ok(())
 }

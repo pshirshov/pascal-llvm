@@ -22,17 +22,23 @@
             pkg-config
             gcc
             zlib
+            libffi
+            libxml2
+            ncurses
           ];
 
           shellHook = ''
             # LLVM environment variables for Inkwell
-            export LLVM_SYS_180_PREFIX="${pkgs.llvm_18.dev}"
+            export LLVM_SYS_181_PREFIX="${pkgs.llvm_18.dev}"
             export LIBCLANG_PATH="${pkgs.llvm_18.lib}/lib"
 
-            # Set up library paths for runtime
+            # Set up library paths for runtime and linking
             export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [
               pkgs.zlib
               pkgs.llvm_18.lib
+              pkgs.libffi
+              pkgs.libxml2
+              pkgs.ncurses
             ]}:$LD_LIBRARY_PATH"
 
             echo "Rust development environment loaded"

@@ -11,7 +11,7 @@ name = "pascalc"
 path = "src/main.rs"
 
 [dependencies]
-inkwell = { version = "0.4", features = ["llvm18-0"] }
+inkwell = { version = "0.6", features = ["llvm18-1"] }
 clap = { version = "4.5", features = ["derive"] }
 anyhow = "1.0"
 thiserror = "1.0"

@@ -31,7 +31,7 @@ _build/default/src/main.exe "$INPUT" -o "${BASENAME}.ll"
 llc "${BASENAME}.ll" -o "${BASENAME}.s"
 
 # Compile assembly to binary
-gcc "${BASENAME}.s" -o "$OUTPUT"
+gcc -no-pie "${BASENAME}.s" -o "$OUTPUT"
 
 echo "Successfully compiled to: $OUTPUT"
 echo "Run with: ./$OUTPUT"
