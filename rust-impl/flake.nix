@@ -10,7 +10,6 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        llvmPackages = pkgs.llvmPackages_18;
 
       in
       {
@@ -19,31 +18,21 @@
             cargo
             rustc
             rust-analyzer
-            clippy
-            rustfmt
-
-            # LLVM dependencies
-            llvmPackages.llvm
-            llvmPackages.libllvm
-
-            # Build tools
+            llvm_18
             pkg-config
             gcc
-
-            # Libraries
             zlib
-            libxml2
           ];
 
           shellHook = ''
             # LLVM environment variables for Inkwell
-            export LLVM_SYS_180_PREFIX="${llvmPackages.llvm.dev}"
-            export LIBCLANG_PATH="${llvmPackages.libclang.lib}/lib"
+            export LLVM_SYS_180_PREFIX="${pkgs.llvm_18.dev}"
+            export LIBCLANG_PATH="${pkgs.llvm_18.lib}/lib"
 
             # Set up library paths for runtime
             export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [
               pkgs.zlib
-              llvmPackages.libllvm
+              pkgs.llvm_18.lib
             ]}:$LD_LIBRARY_PATH"
 
             echo "Rust development environment loaded"
@@ -52,30 +41,5 @@
             echo "LLVM version: $(llvm-config --version)"
           '';
         };
-
-        packages.default = pkgs.rustPlatform.buildRustPackage {
-          pname = "pascalc";
-          version = "0.1.0";
-          src = ./.;
-
-          cargoLock = {
-            lockFile = ./Cargo.lock;
-          };
-
-          nativeBuildInputs = with pkgs; [
-            pkg-config
-            llvmPackages.llvm
-          ];
-
-          buildInputs = with pkgs; [
-            llvmPackages.libllvm
-            zlib
-            libxml2
-          ];
-
-          LLVM_SYS_180_PREFIX = "${llvmPackages.llvm.dev}";
-          LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
-        };
-      }
-    );
+      });
 }

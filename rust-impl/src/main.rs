@@ -2,6 +2,7 @@
 mod ast;
 mod lexer;
 mod parser;
+mod types;
 
 use clap::Parser as ClapParser;
 use std::fs;
@@ -56,9 +57,12 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    // TODO: Type checking
-    // TODO: Code generation
+    // Type check
+    types::check_program(&program).map_err(|e| {
+        anyhow::anyhow!("{}", e)
+    })?;
 
-    eprintln!("Type checking and code generation not yet implemented");
+    // TODO: Code generation
+    eprintln!("Code generation not yet implemented");
     std::process::exit(1);
 }
