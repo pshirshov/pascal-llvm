@@ -65,7 +65,33 @@ impl Parser {
 
         let mut declarations = Vec::new();
         while self.current_token != Token::Dot {
-            declarations.push(self.parse_declaration()?);
+            // Special handling for 'var' to parse multiple declarations
+            if self.current_token == Token::Var {
+                self.advance(); // consume 'var'
+                // Parse all variable declarations until we see a keyword
+                while matches!(self.current_token, Token::Ident(_)) {
+                    let var_name = self.expect_ident()?;
+                    self.expect(Token::Colon)?;
+                    let var_type = self.parse_type_expr()?;
+
+                    let var_init = if self.current_token == Token::Assign {
+                        self.advance();
+                        Some(self.parse_expr()?)
+                    } else {
+                        None
+                    };
+
+                    self.expect(Token::Semicolon)?;
+
+                    declarations.push(Declaration::DVar(VarDecl {
+                        var_name,
+                        var_type,
+                        var_init,
+                    }));
+                }
+            } else {
+                declarations.push(self.parse_declaration()?);
+            }
         }
 
         self.expect(Token::Dot)?;
@@ -79,7 +105,6 @@ impl Parser {
     fn parse_declaration(&mut self) -> Result<Declaration, ParseError> {
         match &self.current_token {
             Token::Type => self.parse_type_decl(),
-            Token::Var => self.parse_var_decl(),
             Token::Function | Token::Procedure => self.parse_func_decl(),
             _ => Err(ParseError {
                 message: format!("Expected declaration, got {:?}", self.current_token),
@@ -140,7 +165,7 @@ impl Parser {
                     param_type,
                 });
 
-                if self.current_token == Token::Comma {
+                if self.current_token == Token::Semicolon {
                     self.advance();
                 } else {
                     break;
@@ -161,9 +186,28 @@ impl Parser {
 
         // Parse local variable declarations
         let mut local_vars = Vec::new();
-        while self.current_token == Token::Var {
-            if let Declaration::DVar(var_decl) = self.parse_var_decl()? {
-                local_vars.push(var_decl);
+        if self.current_token == Token::Var {
+            self.advance(); // consume 'var' keyword
+            // Parse multiple variable declarations until we hit 'begin'
+            while matches!(self.current_token, Token::Ident(_)) {
+                let var_name = self.expect_ident()?;
+                self.expect(Token::Colon)?;
+                let var_type = self.parse_type_expr()?;
+
+                let var_init = if self.current_token == Token::Assign {
+                    self.advance();
+                    Some(self.parse_expr()?)
+                } else {
+                    None
+                };
+
+                self.expect(Token::Semicolon)?;
+
+                local_vars.push(VarDecl {
+                    var_name,
+                    var_type,
+                    var_init,
+                });
             }
         }
 
