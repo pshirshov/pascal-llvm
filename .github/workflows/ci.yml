@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+        with:
+          logger: pretty
+          extra-conf: |
+            sandbox = false
+
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Show environment info
+        run: |
+          nix --version
+          nix develop --command bash -c 'echo "OCaml: $(ocaml --version)" && echo "Dune: $(dune --version)"'
+
+      - name: Build compiler
+        run: |
+          nix develop --command dune build
+
+      - name: Show build artifacts
+        run: |
+          ls -lah _build/default/src/
+
+      - name: Run test suite
+        run: |
+          nix develop --command ./test.sh
+
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output
+          path: test_output/
+          retention-days: 7

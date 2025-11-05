@@ -64,6 +64,8 @@ type stmt =
   | SReadln of identifier list
   | SReturn of expr option
   | SBlock of stmt list
+  | SVarDecl of identifier * type_expr * expr  (** var name: type := init *)
+  | SValDecl of identifier * type_expr * expr  (** val name: type = init *)
 
 (** Variable declaration *)
 type var_decl = {

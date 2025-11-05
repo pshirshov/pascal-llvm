@@ -8,7 +8,7 @@ open Ast
 %token <string> STRING
 %token <string> IDENT
 %token TRUE FALSE
-%token PROGRAM VAR TYPE FUNCTION PROCEDURE BEGIN END
+%token PROGRAM VAR VAL TYPE FUNCTION PROCEDURE BEGIN END
 %token IF THEN ELSE WHILE DO FOR TO DOWNTO OF ARRAY RECORD
 %token TINTEGER TREAL TBOOLEAN TCHAR TSTRING
 %token AND OR NOT DIV MOD
@@ -95,6 +95,10 @@ record_field:
     { { field_name = name; field_type = t } }
 
 statement:
+  | VAR; name=IDENT; COLON; t=type_expr; ASSIGN; init=expr
+    { SVarDecl (name, t, init) }
+  | VAL; name=IDENT; COLON; t=type_expr; EQ; init=expr
+    { SValDecl (name, t, init) }
   | lval=expr; ASSIGN; rval=expr
     { SAssign (lval, rval) }
   | name=IDENT; LPAREN; args=separated_list(COMMA, expr); RPAREN

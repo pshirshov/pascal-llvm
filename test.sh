@@ -1,4 +1,4 @@
-#!/run/current-system/sw/bin/sh
+#!/usr/bin/env bash
 # Automated test runner for Pascal compiler
 
 set -e
@@ -28,7 +28,7 @@ run_test() {
 
     # Compile
     if ! ./compile.sh "$pas_file" "$binary" > "$TEST_DIR/${test_name}.log" 2>&1; then
-        echo "${RED}FAILED${NC} (compilation error)"
+        echo -e "${RED}FAILED${NC} (compilation error)"
         cat "$TEST_DIR/${test_name}.log"
         TESTS_FAILED=$((TESTS_FAILED + 1))
         return 1
@@ -37,7 +37,7 @@ run_test() {
     # Run and capture output
     local actual_output
     if ! actual_output=$("$binary" 2>&1); then
-        echo "${RED}FAILED${NC} (runtime error)"
+        echo -e "${RED}FAILED${NC} (runtime error)"
         echo "Output: $actual_output"
         TESTS_FAILED=$((TESTS_FAILED + 1))
         return 1
@@ -45,11 +45,11 @@ run_test() {
 
     # Compare output
     if [ "$actual_output" = "$expected_output" ]; then
-        echo "${GREEN}PASSED${NC}"
+        echo -e "${GREEN}PASSED${NC}"
         TESTS_PASSED=$((TESTS_PASSED + 1))
         return 0
     else
-        echo "${RED}FAILED${NC} (output mismatch)"
+        echo -e "${RED}FAILED${NC} (output mismatch)"
         echo "Expected: '$expected_output'"
         echo "Got:      '$actual_output'"
         TESTS_FAILED=$((TESTS_FAILED + 1))
@@ -72,14 +72,17 @@ run_test "record_local" "examples/record_local.pas" "30"
 run_test "record_param" "examples/record_param.pas" "40"
 run_test "record_return" "examples/record_return.pas" "100
 200"
+run_test "inline_var" "examples/inline_var.pas" "30
+35"
+run_test "inline_val" "examples/inline_val.pas" "30"
 
 echo ""
 echo "========================================="
 echo "Test Results"
 echo "========================================="
-echo "${GREEN}Passed: $TESTS_PASSED${NC}"
+echo -e "${GREEN}Passed: $TESTS_PASSED${NC}"
 if [ $TESTS_FAILED -gt 0 ]; then
-    echo "${RED}Failed: $TESTS_FAILED${NC}"
+    echo -e "${RED}Failed: $TESTS_FAILED${NC}"
 else
     echo "Failed: $TESTS_FAILED"
 fi

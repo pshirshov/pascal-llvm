@@ -251,6 +251,15 @@ let codegen_lvalue ctx expr =
 
 let rec codegen_stmt ctx printf_func scanf_func stmt =
   match stmt with
+  | SVarDecl (name, var_type, init) | SValDecl (name, var_type, init) ->
+      let resolved = resolve_type ctx var_type in
+      let lltype = lltype_of_type ctx resolved in
+      let alloca = build_alloca lltype name ctx.builder in
+      Hashtbl.add ctx.named_values name alloca;
+      Hashtbl.add ctx.var_types name resolved;
+      let init_val = codegen_expr ctx init in
+      ignore (build_store init_val alloca ctx.builder)
+
   | SAssign (lval, rval) ->
       let lval_ptr = codegen_lvalue ctx lval in
       let rval_val = codegen_expr ctx rval in

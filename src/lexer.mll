@@ -8,6 +8,7 @@ let () =
   List.iter (fun (kwd, tok) -> Hashtbl.add keyword_table kwd tok)
     [ "program", PROGRAM;
       "var", VAR;
+      "val", VAL;
       "type", TYPE;
       "function", FUNCTION;
       "procedure", PROCEDURE;

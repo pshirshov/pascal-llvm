@@ -1,5 +1,7 @@
 # Pascal-like Language Compiler
 
+![CI](https://github.com/USERNAME/REPO/workflows/CI/badge.svg)
+
 A simple Pascal-like language compiler built on LLVM using OCaml.
 
 ## Features
@@ -8,6 +10,8 @@ A simple Pascal-like language compiler built on LLVM using OCaml.
 - **Composite Types**: Arrays, Records (structs), Pointers
 - **Control Flow**: if/then/else, while, for loops
 - **Functions**: Functions and procedures with recursion support
+- **Inline Declarations**: Scala-style `var` and `val` declarations
+- **Immutability**: `val` declarations are compile-time immutable
 - **I/O**: Console input/output via writeln, write, readln
 - **Pointers**: Pointer arithmetic, address-of (@), dereference (^), dynamic allocation (new)
 
@@ -114,6 +118,8 @@ end.
 ### Statements
 
 - Assignment: `variable := expression`
+- Inline mutable declaration: `var name: Type := initializer`
+- Inline immutable declaration: `val name: Type = initializer`
 - Function call: `functionName(args)`
 - If: `if condition then ... else ... end`
 - While: `while condition do ... end`
@@ -169,15 +175,30 @@ This will compile and run all example programs, verifying their outputs. The tes
 - **factorial_recursive** - Recursive factorial computation
 - **loops_for** - For loop with accumulation
 - **arithmetic_expr** - Complex arithmetic expressions
+- **record_local** - Local record usage
+- **record_param** - Records as function parameters
+- **record_return** - Records as return values
+- **inline_var** - Inline mutable variable declarations
+- **inline_val** - Inline immutable variable declarations
 
 All tests must pass for the compiler to be considered working correctly.
+
+## Continuous Integration
+
+The project uses GitHub Actions for CI with the following workflow:
+
+1. **Nix Installation**: Uses [Determinate Nix Installer](https://github.com/DeterminateSystems/nix-installer-action) for reproducible builds
+2. **Caching**: Uses [Magic Nix Cache](https://github.com/DeterminateSystems/magic-nix-cache-action) for faster builds
+3. **Build**: Compiles the compiler with `dune build`
+4. **Test**: Runs the full test suite with `./test.sh`
+
+The CI workflow runs on every push and pull request to `main`/`master` branches.
 
 ## Limitations
 
 - No dynamic arrays
 - No function pointers
 - Limited string operations
-- Record field access in codegen not fully implemented
 - No separate compilation/modules
 - Return statements directly in if/else branches require begin/end blocks
 - Grammar requires all programs to end with just declarations (no main block)

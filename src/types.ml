@@ -6,12 +6,14 @@ type symbol_table = {
   types : (identifier, type_expr) Hashtbl.t;
   vars : (identifier, type_expr) Hashtbl.t;
   funcs : (identifier, (param list * type_expr option)) Hashtbl.t;
+  vals : (identifier, unit) Hashtbl.t;  (* Track immutable variables *)
 }
 
 let create_symbol_table () = {
   types = Hashtbl.create 17;
   vars = Hashtbl.create 53;
   funcs = Hashtbl.create 17;
+  vals = Hashtbl.create 53;
 }
 
 let rec types_equal t1 t2 =
@@ -128,7 +130,28 @@ let rec check_expr symtab expr =
 
 let rec check_stmt symtab return_type stmt =
   match stmt with
+  | SVarDecl (name, var_type, init) ->
+      let resolved = resolve_type symtab var_type in
+      let init_type = check_expr symtab init in
+      if not (types_equal resolved init_type) then
+        raise (Type_error (Printf.sprintf "Variable %s: initializer type mismatch" name));
+      Hashtbl.add symtab.vars name resolved
+
+  | SValDecl (name, var_type, init) ->
+      let resolved = resolve_type symtab var_type in
+      let init_type = check_expr symtab init in
+      if not (types_equal resolved init_type) then
+        raise (Type_error (Printf.sprintf "Val %s: initializer type mismatch" name));
+      Hashtbl.add symtab.vars name resolved;
+      Hashtbl.add symtab.vals name ()
+
   | SAssign (lval, rval) ->
+      (* Check if trying to assign to a val *)
+      (match lval with
+       | EVar name ->
+           if Hashtbl.mem symtab.vals name then
+             raise (Type_error (Printf.sprintf "Cannot assign to val: %s" name))
+       | _ -> ());
       let lval_type = resolve_type symtab (check_expr symtab lval) in
       let rval_type = resolve_type symtab (check_expr symtab rval) in
       if not (types_equal lval_type rval_type) then
@@ -223,6 +246,7 @@ let check_program prog =
           types = Hashtbl.copy symtab.types;
           vars = Hashtbl.copy symtab.vars;
           funcs = symtab.funcs;
+          vals = Hashtbl.copy symtab.vals;
         } in
 
         (* Add parameters to local scope *)
