@@ -1,5 +1,8 @@
 # Pascal-like Language Compiler
 
+[![CI](https://github.com/pshirshov/pascal-llvm/actions/workflows/ci.yml/badge.svg)](https://github.com/pshirshov/pascal-llvm/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Two implementations of a simple Pascal-like language compiler built on LLVM.
 
 ## Implementations
@@ -20,10 +23,11 @@ The original implementation using OCaml 5.2 with LLVM OCaml bindings.
 
 Alternative implementation using Rust with Inkwell (safe LLVM bindings).
 
-- **Status**: 🚧 In development
-- **LLVM Bindings**: Inkwell (Rust LLVM wrapper)
+- **Status**: ✅ Complete and tested
+- **LLVM Bindings**: Inkwell 0.6 (LLVM 18)
 - **Build System**: Cargo
-- **Parser**: TBD
+- **Parser**: Hand-written recursive descent
+- **Tests**: 10 automated tests, all passing
 
 [View Rust Implementation →](./rust-impl/)
 
@@ -118,20 +122,20 @@ cargo test
 
 Both implementations use GitHub Actions with Nix for reproducible builds:
 
-- **OCaml**: Full CI with Determinate Nix Installer
-- **Rust**: (To be implemented)
+- **OCaml**: Full CI with Determinate Nix Installer (LLVM 21)
+- **Rust**: Full CI with Determinate Nix Installer (LLVM 18)
 
 ## Implementation Comparison
 
 | Feature | OCaml | Rust |
 |---------|-------|------|
-| LLVM Bindings | ocaml-llvm | Inkwell |
+| LLVM Bindings | ocaml-llvm 21 | Inkwell 0.6 (LLVM 18) |
 | Type Safety | Strong | Strong |
 | Memory Safety | GC | Ownership |
 | Build Speed | Fast (Dune) | Fast (Cargo) |
 | Ecosystem | Nix/Opam | Cargo |
 | Error Messages | Good | Excellent |
-| Status | ✅ Complete | 🚧 In Progress |
+| Status | ✅ Complete | ✅ Complete |
 
 ## Documentation
 
@@ -142,7 +146,7 @@ Both implementations use GitHub Actions with Nix for reproducible builds:
 
 ## License
 
-MIT (or your preferred license)
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
