@@ -13,7 +13,7 @@
 
 ### Build System
 - ✅ Dune 3.20
-- ✅ Nix flake with LLVM 18
+- ✅ Nix flake with LLVM (version 21 to match OCaml bindings)
 - ✅ Library paths fixed (zlib, LLVM)
 
 ### Testing
@@ -147,6 +147,17 @@ Rust implementation: `rust-impl/src/codegen.rs` (850 lines)
 - **Issue**: Runtime binaries couldn't find `libz.so.1`
 - **Fix**: Added `LD_LIBRARY_PATH` setup in both flakes
 - **Status**: ✅ Fixed in both OCaml and Rust
+
+### LLVM Version Mismatch (OCaml)
+
+- **Issue**: OCaml LLVM bindings (21.1.2) incompatible with LLVM 18.1.8
+- **Symptoms**: CI failures with undefined references to LLVM 21 functions
+  - `LLVMPrintDbgRecordToString`
+  - `LLVMConstStringInContext2`
+  - `LLVMPositionBuilderBeforeInstrAndDbgRecords`
+- **Root Cause**: `ocamlPackages.llvm` (v21.1.2) built against LLVM 21, but flake specified `llvm_18`
+- **Fix**: Changed OCaml flake.nix to use `llvm` (default version 21) instead of `llvm_18`
+- **Status**: ✅ Fixed - awaiting CI verification
 
 ## Testing Status
 

@@ -21,7 +21,7 @@
             ocamlPackages.menhir
             ocamlPackages.ocaml-lsp
             ocamlPackages.ocamlformat
-            llvm_18
+            llvm  # Use default LLVM version to match ocamlPackages.llvm
             ocamlPackages.llvm
 
             # Runtime and linking dependencies
@@ -36,7 +36,7 @@
             # Set up library paths for runtime and linking
             export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [
               pkgs.zlib
-              pkgs.llvm_18.lib
+              pkgs.llvm.lib
               pkgs.libffi
               pkgs.libxml2
               pkgs.ncurses
