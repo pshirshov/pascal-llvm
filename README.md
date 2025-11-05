@@ -155,6 +155,23 @@ The compiler uses LLVM OCaml bindings to generate efficient machine code.
 ./fibonacci  # outputs: 5 (fib(5))
 ```
 
+## Running Tests
+
+The project includes an automated test suite:
+
+```bash
+./test.sh
+```
+
+This will compile and run all example programs, verifying their outputs. The test suite includes:
+- **simple_var** - Variable assignment and I/O
+- **fibonacci_recursive** - Recursive Fibonacci computation
+- **factorial_recursive** - Recursive factorial computation
+- **loops_for** - For loop with accumulation
+- **arithmetic_expr** - Complex arithmetic expressions
+
+All tests must pass for the compiler to be considered working correctly.
+
 ## Limitations
 
 - No dynamic arrays

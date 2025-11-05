@@ -85,7 +85,8 @@ let rec check_expr symtab expr =
              raise (Type_error (Printf.sprintf "Function %s: wrong number of arguments" name));
            List.iter2 (fun arg param ->
              let arg_type = check_expr symtab arg in
-             if not (types_equal arg_type param.param_type) then
+             let param_type = resolve_type symtab param.param_type in
+             if not (types_equal arg_type param_type) then
                raise (Type_error (Printf.sprintf "Function %s: argument type mismatch" name))
            ) args params;
            (match ret_type with
@@ -128,8 +129,8 @@ let rec check_expr symtab expr =
 let rec check_stmt symtab return_type stmt =
   match stmt with
   | SAssign (lval, rval) ->
-      let lval_type = check_expr symtab lval in
-      let rval_type = check_expr symtab rval in
+      let lval_type = resolve_type symtab (check_expr symtab lval) in
+      let rval_type = resolve_type symtab (check_expr symtab rval) in
       if not (types_equal lval_type rval_type) then
         raise (Type_error "Assignment type mismatch")
 

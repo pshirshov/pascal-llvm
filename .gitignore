@@ -40,6 +40,12 @@ two_calls
 *_new
 *_check
 *_script
+loops_test
+arith
+arithmetic_test
+
+# Test artifacts
+test_output/
 
 # Nix
 result

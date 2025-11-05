@@ -10,6 +10,8 @@ type codegen_context = {
   mutable named_values : (string, llvalue) Hashtbl.t;
   mutable type_cache : (type_expr, lltype) Hashtbl.t;
   mutable func_types : (string, lltype) Hashtbl.t;
+  mutable type_defs : (string, type_expr) Hashtbl.t;
+  mutable var_types : (string, type_expr) Hashtbl.t;
 }
 
 let create_context module_name =
@@ -23,7 +25,17 @@ let create_context module_name =
     named_values = Hashtbl.create 53;
     type_cache = Hashtbl.create 17;
     func_types = Hashtbl.create 17;
+    type_defs = Hashtbl.create 17;
+    var_types = Hashtbl.create 53;
   }
+
+let rec resolve_type ctx ty =
+  match ty with
+  | TNamed name ->
+      (match Hashtbl.find_opt ctx.type_defs name with
+       | Some resolved -> resolve_type ctx resolved
+       | None -> raise (Codegen_error (Printf.sprintf "Undefined type: %s" name)))
+  | _ -> ty
 
 let rec lltype_of_type ctx ty =
   match Hashtbl.find_opt ctx.type_cache ty with
@@ -42,10 +54,21 @@ let rec lltype_of_type ctx ty =
             let field_types = List.map (fun f -> lltype_of_type ctx f.field_type) fields in
             struct_type ctx.llcontext (Array.of_list field_types)
         | TNamed name ->
-            raise (Codegen_error (Printf.sprintf "Unresolved named type: %s" name))
+            (match Hashtbl.find_opt ctx.type_defs name with
+             | Some resolved_type -> lltype_of_type ctx resolved_type
+             | None -> raise (Codegen_error (Printf.sprintf "Unresolved named type: %s" name)))
       in
       Hashtbl.add ctx.type_cache ty llty;
       llty
+
+let get_field_index fields field_name =
+  let rec find_index i = function
+    | [] -> None
+    | f :: rest ->
+        if f.field_name = field_name then Some i
+        else find_index (i + 1) rest
+  in
+  find_index 0 fields
 
 (* Declare external runtime functions *)
 let declare_runtime_functions ctx =
@@ -85,7 +108,12 @@ let rec codegen_expr ctx expr =
 
   | EVar name ->
       (match Hashtbl.find_opt ctx.named_values name with
-       | Some ptr -> build_load (lltype_of_type ctx TInteger) ptr name ctx.builder
+       | Some ptr ->
+           let var_type = match Hashtbl.find_opt ctx.var_types name with
+             | Some t -> resolve_type ctx t
+             | None -> TInteger  (* fallback to integer for backward compatibility *)
+           in
+           build_load (lltype_of_type ctx var_type) ptr name ctx.builder
        | None -> raise (Codegen_error (Printf.sprintf "Unknown variable: %s" name)))
 
   | EBinop (op, e1, e2) ->
@@ -133,9 +161,32 @@ let rec codegen_expr ctx expr =
       let ptr = build_gep (type_of arr_val) arr_val [| idx_val |] "arraytmp" ctx.builder in
       build_load (element_type (type_of arr_val)) ptr "arrayload" ctx.builder
 
-  | ERecordAccess (_rec_expr, _field) ->
-      (* Simplified: requires type information *)
-      raise (Codegen_error "Record access not fully implemented")
+  | ERecordAccess (rec_expr, field) ->
+      (* Get the variable name and its type for now we only support direct variable access *)
+      (match rec_expr with
+       | EVar var_name ->
+           let rec_type = match Hashtbl.find_opt ctx.var_types var_name with
+             | Some t -> resolve_type ctx t
+             | None -> raise (Codegen_error (Printf.sprintf "Unknown variable: %s" var_name))
+           in
+           (match rec_type with
+            | TRecord fields ->
+                let field_idx = match get_field_index fields field with
+                  | Some i -> i
+                  | None -> raise (Codegen_error (Printf.sprintf "Record has no field: %s" field))
+                in
+                let rec_ptr = match Hashtbl.find_opt ctx.named_values var_name with
+                  | Some ptr -> ptr
+                  | None -> raise (Codegen_error (Printf.sprintf "Unknown variable: %s" var_name))
+                in
+                let zero = const_int (i32_type ctx.llcontext) 0 in
+                let field_idx_val = const_int (i32_type ctx.llcontext) field_idx in
+                let field_ptr = build_in_bounds_gep (lltype_of_type ctx rec_type) rec_ptr
+                  [| zero; field_idx_val |] (Printf.sprintf "%s.%s" var_name field) ctx.builder in
+                let field_type = (List.nth fields field_idx).field_type in
+                build_load (lltype_of_type ctx field_type) field_ptr "fieldload" ctx.builder
+            | _ -> raise (Codegen_error "Record access on non-record type"))
+       | _ -> raise (Codegen_error "Complex record expressions not yet supported"))
 
   | EDeref ptr ->
       let ptr_val = codegen_expr ctx ptr in
@@ -170,6 +221,30 @@ let codegen_lvalue ctx expr =
       let arr_val = codegen_expr ctx arr in
       let idx_val = codegen_expr ctx idx in
       build_gep (type_of arr_val) arr_val [| idx_val |] "arraylval" ctx.builder
+  | ERecordAccess (rec_expr, field) ->
+      (* Get the variable name and its type *)
+      (match rec_expr with
+       | EVar var_name ->
+           let rec_type = match Hashtbl.find_opt ctx.var_types var_name with
+             | Some t -> resolve_type ctx t
+             | None -> raise (Codegen_error (Printf.sprintf "Unknown variable: %s" var_name))
+           in
+           (match rec_type with
+            | TRecord fields ->
+                let field_idx = match get_field_index fields field with
+                  | Some i -> i
+                  | None -> raise (Codegen_error (Printf.sprintf "Record has no field: %s" field))
+                in
+                let rec_ptr = match Hashtbl.find_opt ctx.named_values var_name with
+                  | Some ptr -> ptr
+                  | None -> raise (Codegen_error (Printf.sprintf "Unknown variable: %s" var_name))
+                in
+                let zero = const_int (i32_type ctx.llcontext) 0 in
+                let field_idx_val = const_int (i32_type ctx.llcontext) field_idx in
+                build_in_bounds_gep (lltype_of_type ctx rec_type) rec_ptr
+                  [| zero; field_idx_val |] (Printf.sprintf "%s.%s_ptr" var_name field) ctx.builder
+            | _ -> raise (Codegen_error "Record access on non-record type"))
+       | _ -> raise (Codegen_error "Complex record expressions not yet supported"))
   | EDeref ptr ->
       codegen_expr ctx ptr
   | _ -> raise (Codegen_error "Invalid lvalue")
@@ -328,16 +403,20 @@ let codegen_function ctx printf_func scanf_func func =
   let bb = append_block ctx.llcontext "entry" the_function in
   position_at_end bb ctx.builder;
 
-  (* Save old named values and create new scope *)
+  (* Save old named values and types, create new scope *)
   let old_values = Hashtbl.copy ctx.named_values in
+  let old_types = Hashtbl.copy ctx.var_types in
   Hashtbl.clear ctx.named_values;
+  Hashtbl.clear ctx.var_types;
 
   (* Allocate parameters *)
   Array.iteri (fun i param ->
-    let param_name = (List.nth func.params i).param_name in
+    let param_info = List.nth func.params i in
+    let param_name = param_info.param_name in
     let alloca = build_alloca (type_of param) param_name ctx.builder in
     ignore (build_store param alloca ctx.builder);
-    Hashtbl.add ctx.named_values param_name alloca
+    Hashtbl.add ctx.named_values param_name alloca;
+    Hashtbl.add ctx.var_types param_name param_info.param_type
   ) (params the_function);
 
   (* Allocate local variables *)
@@ -345,6 +424,7 @@ let codegen_function ctx printf_func scanf_func func =
     let var_type = lltype_of_type ctx var.var_type in
     let alloca = build_alloca var_type var.var_name ctx.builder in
     Hashtbl.add ctx.named_values var.var_name alloca;
+    Hashtbl.add ctx.var_types var.var_name var.var_type;
     (match var.var_init with
      | Some init ->
          let init_val = codegen_expr ctx init in
@@ -363,20 +443,29 @@ let codegen_function ctx printf_func scanf_func func =
        | Some _ -> ()  (* Should have explicit return *)
        | None -> ignore (build_ret_void ctx.builder));
 
-  (* Restore named values *)
+  (* Restore named values and types *)
   ctx.named_values <- old_values;
+  ctx.var_types <- old_types;
   the_function
 
 let codegen_program prog =
   let ctx = create_context prog.program_name in
   let (printf_func, scanf_func, _malloc_func) = declare_runtime_functions ctx in
 
+  (* Process type declarations *)
+  List.iter (function
+    | DType { type_name; type_def } ->
+        Hashtbl.add ctx.type_defs type_name type_def
+    | _ -> ()
+  ) prog.declarations;
+
   (* Process global variables *)
   List.iter (function
     | DVar var ->
         let var_type = lltype_of_type ctx var.var_type in
         let global = define_global var.var_name (const_null var_type) ctx.llmodule in
-        Hashtbl.add ctx.named_values var.var_name global
+        Hashtbl.add ctx.named_values var.var_name global;
+        Hashtbl.add ctx.var_types var.var_name var.var_type
     | _ -> ()
   ) prog.declarations;
 
