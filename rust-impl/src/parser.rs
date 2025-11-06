@@ -735,11 +735,10 @@ mod tests {
         let input = r#"
 program Test;
 var x: integer;
-function main(): integer;
-begin
-  x := 42;
+def main(): integer = {
+  x = 42
   return 0
-end;
+}
 .
 "#;
         let mut parser = Parser::new(input);
@@ -752,12 +751,11 @@ end;
     fn test_inline_declarations() {
         let input = r#"
 program Test;
-function main(): integer;
-begin
-  var x: integer := 10;
-  val y: integer = 20;
+def main(): integer = {
+  var x: integer = 10
+  val y: integer = 20
   return x + y
-end;
+}
 .
 "#;
         let mut parser = Parser::new(input);
