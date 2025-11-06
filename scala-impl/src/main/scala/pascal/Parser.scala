@@ -69,7 +69,7 @@ object Parser:
 
   def recordType[$: P]: P[TypeExpr] = P(
     "record" ~ ws ~
-    recordField.rep(sep = ws ~ ";" ~ ws) ~ ws ~
+    recordField.rep(sep = ws ~ ";" ~ ws) ~ (ws ~ ";").? ~ ws ~
     "end"
   ).map(fields => TRecord(fields.toList))
 

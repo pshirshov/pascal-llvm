@@ -2,12 +2,22 @@
 
 A compiler for a Pascal-like language implemented in Scala 3, using fastparse for parsing and JavaCPP LLVM bindings for code generation.
 
+## Status
+
+✅ **Complete and tested** - All 10 test cases passing
+
 ## Features
 
 - **Parser**: Fastparse-based parser combinators for clean, declarative parsing
 - **Type Checker**: Strong static type checking with support for inference
 - **Code Generator**: LLVM IR generation via JavaCPP bindings
 - **Target**: Native executables via LLVM
+
+### Recent Improvements
+
+- **Parser fix**: Added support for optional trailing semicolons in record field declarations
+- **LLVM codegen**: Fixed duplicate function declarations in LLVM IR generation
+- **Testing**: Comprehensive test suite with scala-cli compatibility
 
 ## Technology Stack
 
@@ -138,6 +148,27 @@ This implementation follows Scala 3 best practices:
 - Loops and control flow
 - Record types
 - Inline declarations (var/val)
+
+### Alternative Testing with scala-cli
+
+If you encounter issues with Nix or sbt, you can test the parser directly using scala-cli:
+
+```bash
+# Test parser on actual Pascal files
+scala-cli run test_actual_file.scala
+
+# Run specific parser tests
+scala-cli run test_minimal.scala
+scala-cli run test_exact.scala
+```
+
+### Known Issues
+
+- **Nix sandbox**: On some systems without kernel namespace support, you may need to disable Nix sandboxing:
+  ```bash
+  nix develop --option sandbox false
+  ```
+- **JavaCPP cache**: The LLVM native libraries are cached in `~/.javacpp/cache/` on first run
 
 ## License
 

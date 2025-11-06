@@ -71,3 +71,35 @@ jobs:
           name: test-output-rust
           path: rust-impl/test_output/
           retention-days: 7
+
+  test-scala:
+    name: Scala Implementation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+        with:
+          logger: pretty
+          extra-conf: |
+            sandbox = false
+
+      - name: Setup Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Run Scala test suite
+        working-directory: ./scala-impl
+        run: |
+          nix develop --command ./test.sh
+
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output-scala
+          path: scala-impl/test_output/
+          retention-days: 7
