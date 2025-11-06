@@ -360,7 +360,10 @@ object CodeGen:
     val funcType = LLVMFunctionType(retType, paramTypes, func.params.size, 0)
     ctx.funcTypes(func.funcName) = funcType
 
-    val function = LLVMAddFunction(ctx.module, func.funcName, funcType)
+    // Get existing function or create new one
+    val function = LLVMGetNamedFunction(ctx.module, func.funcName) match
+      case null => LLVMAddFunction(ctx.module, func.funcName, funcType)
+      case existingFunc => existingFunc
 
     val entryBB = LLVMAppendBasicBlockInContext(ctx.context, function, "entry")
     LLVMPositionBuilderAtEnd(ctx.builder, entryBB)

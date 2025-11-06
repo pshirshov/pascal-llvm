@@ -15,5 +15,11 @@ if [ ! -f "target/scala-3.5.2/pascal-compiler.jar" ]; then
     sbt assembly
 fi
 
+# Set JavaCPP library path for LLVM native bindings
+# This allows JavaCPP to find the bundled LLVM libraries in the JAR
+export JAVACPP_CACHE_DIR="${TMPDIR:-/tmp}/.javacpp-cache"
+mkdir -p "$JAVACPP_CACHE_DIR"
+
 # Run the compiler
-java -jar target/scala-3.5.2/pascal-compiler.jar "$INPUT" "$OUTPUT"
+java -Djava.io.tmpdir="$JAVACPP_CACHE_DIR" \
+     -jar target/scala-3.5.2/pascal-compiler.jar "$INPUT" "$OUTPUT"
