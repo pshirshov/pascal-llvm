@@ -229,17 +229,17 @@ object Parser:
   def funcDecl[$: P]: P[FuncDecl] = P(
     "function" ~ ws ~ identifier ~ ws ~
     "(" ~ ws ~ param.rep(sep = ws ~ ";" ~ ws) ~ ws ~ ")" ~ ws ~
-    ":" ~ ws ~ typeExpr ~ ws ~
-    (("var" ~ ws ~ varDecl.rep(sep = ws ~ ";" ~ ws)).map(_.toList) | Pass.map(_ => Nil)) ~ ws ~
-    "begin" ~ ws ~ stmt.rep(sep = ws ~ ";" ~ ws) ~ ws ~ "end"
+    ":" ~ ws ~ typeExpr ~ ws ~ ";" ~ ws ~
+    ((ws ~ "var" ~ ws ~ varDecl.rep(sep = ws ~ ";" ~ ws, min = 1) ~ ws ~ ";").map(_.toList) | Pass.map(_ => Nil)) ~ ws ~
+    "begin" ~ ws ~ stmt.rep(sep = ws ~ ";" ~ ws) ~ ws ~ "end" ~ ws ~ ";"
   ).map((name, params, retType, localVars, body) =>
     FuncDecl(name, params.toList, Some(retType), localVars, body.toList))
 
   def procedureDecl[$: P]: P[FuncDecl] = P(
     "procedure" ~ ws ~ identifier ~ ws ~
-    "(" ~ ws ~ param.rep(sep = ws ~ ";" ~ ws) ~ ws ~ ")" ~ ws ~
-    (("var" ~ ws ~ varDecl.rep(sep = ws ~ ";" ~ ws)).map(_.toList) | Pass.map(_ => Nil)) ~ ws ~
-    "begin" ~ ws ~ stmt.rep(sep = ws ~ ";" ~ ws) ~ ws ~ "end"
+    "(" ~ ws ~ param.rep(sep = ws ~ ";" ~ ws) ~ ws ~ ")" ~ ws ~ ";" ~ ws ~
+    ((ws ~ "var" ~ ws ~ varDecl.rep(sep = ws ~ ";" ~ ws, min = 1) ~ ws ~ ";").map(_.toList) | Pass.map(_ => Nil)) ~ ws ~
+    "begin" ~ ws ~ stmt.rep(sep = ws ~ ";" ~ ws) ~ ws ~ "end" ~ ws ~ ";"
   ).map((name, params, localVars, body) =>
     FuncDecl(name, params.toList, None, localVars, body.toList))
 
@@ -262,11 +262,12 @@ object Parser:
   ).map(_.toList)
 
   def programDeclarations[$: P]: P[List[Declaration]] = P(
-    (programVarDecls.map(vars => vars.map(DVar.apply)) |
-     declaration.map(List(_)) |
-     typeDecl.map(td => List(DType(td))) |
-     funcDecl.map(fd => List(DFunc(fd))) |
-     procedureDecl.map(pd => List(DFunc(pd)))
+    (ws ~
+     (programVarDecls.map(vars => vars.map(DVar.apply)) |
+      typeDecl.map(td => List(DType(td))) |
+      funcDecl.map(fd => List(DFunc(fd))) |
+      procedureDecl.map(pd => List(DFunc(pd)))
+     )
     ).rep
   ).map(_.flatten.toList)
 
