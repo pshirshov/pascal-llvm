@@ -8,12 +8,13 @@ A simple Pascal-like language compiler built on LLVM using OCaml.
 
 - **Data Types**: Integer, Real, Boolean, Char, String
 - **Composite Types**: Arrays, Records (structs), Pointers
-- **Control Flow**: if/then/else, while, for loops
-- **Functions**: Functions and procedures with recursion support
-- **Inline Declarations**: Scala-style `var` and `val` declarations
+- **Control Flow**: `if (cond) { }`, `while (cond) { }`, `for (var = start to end) { }`
+- **Functions**: `def name(params): Type = { }` with recursion support
+- **Variable Declarations**: `var` (mutable) and `val` (immutable)
 - **Immutability**: `val` declarations are compile-time immutable
 - **I/O**: Console input/output via writeln, write, readln
-- **Pointers**: Pointer arithmetic, address-of (@), dereference (^), dynamic allocation (new)
+- **Pointers**: Address-of (@), dereference (^), dynamic allocation (new)
+- **Comments**: `//` line comments and `/* */` block comments
 
 ## Prerequisites
 
@@ -89,14 +90,12 @@ type
 var
   variableName: TypeName;
 
-// Function/Procedure declarations
-function FunctionName(param: Type): ReturnType;
-var
-  localVar: Type;
-begin
+// Function declarations
+def FunctionName(param: Type): ReturnType = {
+  var localVar: Type
   // statements
   return value
-end;
+}
 
 // Main program body
 begin

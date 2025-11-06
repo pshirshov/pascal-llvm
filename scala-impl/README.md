@@ -6,7 +6,20 @@ A compiler for a Pascal-like language implemented in Scala 3, using fastparse fo
 
 ✅ **Complete and tested** - All 10 test cases passing
 
-## Features
+## Language Features
+
+Modern Scala-inspired syntax:
+
+- **Data Types**: Integer, Real, Boolean, Char, String
+- **Composite Types**: Arrays, Records (structs), Pointers
+- **Control Flow**: `if (cond) { }`, `while (cond) { }`, `for (var = start to end) { }`
+- **Functions**: `def name(params): Type = { }` with recursion support
+- **Variable Declarations**: `var` (mutable) and `val` (immutable)
+- **I/O**: Console input/output (writeln, write, readln)
+- **Pointers**: Address-of (@), dereference (^), dynamic allocation (new)
+- **Comments**: `//` line comments and `/* */` block comments
+
+## Implementation Features
 
 - **Parser**: Fastparse-based parser combinators for clean, declarative parsing
 - **Type Checker**: Strong static type checking with support for inference

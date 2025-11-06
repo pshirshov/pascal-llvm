@@ -3,7 +3,7 @@
 [![CI](https://github.com/pshirshov/pascal-llvm/actions/workflows/ci.yml/badge.svg)](https://github.com/pshirshov/pascal-llvm/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Three implementations of a simple Pascal-like language compiler built on LLVM.
+Three implementations of a modern Pascal-like language compiler built on LLVM. Features a clean, Scala-inspired syntax with `def` functions, brace blocks, and immutable `val` declarations.
 
 ## Implementations
 
@@ -45,15 +45,16 @@ JVM-based implementation using Scala 3 with fastparse and JavaCPP LLVM bindings.
 
 ## Language Features
 
-All three implementations support the same Pascal-like language:
+All three implementations support the same modern Pascal-like language with Scala-style syntax:
 
 - **Data Types**: Integer, Real, Boolean, Char, String
 - **Composite Types**: Arrays, Records (structs), Pointers
-- **Control Flow**: if/then/else, while, for loops
-- **Functions**: Functions and procedures with recursion
-- **Inline Declarations**: Scala-style `var` (mutable) and `val` (immutable)
+- **Control Flow**: `if (cond) { }`, `while (cond) { }`, `for (var = start to end) { }`
+- **Functions**: `def name(params): Type = { }` with recursion support
+- **Variable Declarations**: `var` (mutable) and `val` (immutable)
 - **I/O**: Console input/output (writeln, write, readln)
 - **Pointers**: Address-of (@), dereference (^), dynamic allocation (new)
+- **Comments**: `//` line comments and `/* */` block comments
 
 ## Quick Start
 
@@ -91,39 +92,37 @@ sbt assembly
 ```pascal
 program Fibonacci;
 
-function fib(n: integer): integer;
-begin
-  if n <= 1 then
+def fib(n: Integer): Integer = {
+  if (n <= 1) {
     return n
-  else
+  } else {
     return fib(n-1) + fib(n-2)
-end;
+  }
+}
 
-function main(): integer;
-begin
-  val result: integer = fib(5);
-  writeln(result);
+def main(): Integer = {
+  val result: Integer = fib(5)
+  writeln(result)
   return 0
-end;
+}
 
 .
 ```
 
-## Inline Variable Declarations
+## Variable Declarations
 
-Both implementations support Scala-style inline declarations:
+All implementations support inline variable declarations:
 
 ```pascal
-function demo(): integer;
-begin
-  var counter: integer := 0;    (* mutable *)
-  val max: integer = 100;       (* immutable *)
+def demo(): Integer = {
+  var counter: Integer = 0     // mutable
+  val max: Integer = 100       // immutable
 
-  counter := counter + 1;       (* OK *)
-  (* max := 200; *)            (* Error: cannot assign to val *)
+  counter = counter + 1        // OK
+  // max = 200                 // Error: cannot assign to val
 
   return counter
-end;
+}
 ```
 
 ## Testing

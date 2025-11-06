@@ -13,7 +13,7 @@ object Parser:
 
   // Whitespace and comments
   def wsChars[$: P]: P[Unit] = P(CharsWhileIn(" \t\r\n"))
-  def blockComment[$: P]: P[Unit] = P("(*" ~ (!"*)" ~ AnyChar).rep ~ "*)")
+  def blockComment[$: P]: P[Unit] = P("/*" ~ (!"*/" ~ AnyChar).rep ~ "*/")
   def lineComment[$: P]: P[Unit] = P("//" ~ (!"\n" ~ AnyChar).rep)
   def ws[$: P]: P[Unit] = P((wsChars | blockComment | lineComment).rep)
 

@@ -145,14 +145,14 @@ impl Lexer {
             return;
         }
 
-        // Handle (* *) style comments
-        if self.current_char == Some('(') && self.peek(1) == Some('*') {
-            self.advance(); // skip (
+        // Handle /* */ style comments
+        if self.current_char == Some('/') && self.peek(1) == Some('*') {
+            self.advance(); // skip /
             self.advance(); // skip *
             while self.current_char.is_some() {
-                if self.current_char == Some('*') && self.peek(1) == Some(')') {
+                if self.current_char == Some('*') && self.peek(1) == Some('/') {
                     self.advance(); // skip *
-                    self.advance(); // skip )
+                    self.advance(); // skip /
                     break;
                 }
                 self.advance();

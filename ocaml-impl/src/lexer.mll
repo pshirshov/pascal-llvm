@@ -52,7 +52,7 @@ rule token = parse
   | whitespace    { token lexbuf }
   | newline       { Lexing.new_line lexbuf; token lexbuf }
   | "//"          { line_comment lexbuf }
-  | "(*"          { block_comment lexbuf }
+  | "/*"          { block_comment lexbuf }
   | '('           { LPAREN }
   | ')'           { RPAREN }
   | '['           { LBRACK }
@@ -96,7 +96,7 @@ and line_comment = parse
   | _             { line_comment lexbuf }
 
 and block_comment = parse
-  | "*)"          { token lexbuf }
+  | "*/"          { token lexbuf }
   | newline       { Lexing.new_line lexbuf; block_comment lexbuf }
   | eof           { raise (Lexical_error "Unclosed comment") }
   | _             { block_comment lexbuf }

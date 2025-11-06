@@ -4,25 +4,26 @@ Alternative implementation using Rust with Inkwell (safe LLVM bindings).
 
 ## Status
 
-🚧 **In Development**
+✅ **Complete and Tested**
 
-- ✅ Lexer - Complete with all keywords and tokens
+- ✅ Lexer - Complete with modern syntax tokens
 - ✅ Parser - Complete recursive descent parser
-- ⏳ Type checker - In progress
-- ⏳ Code generator - In progress
-- ⏳ Test suite - Pending full implementation
+- ✅ Type checker - Complete with val immutability
+- ✅ Code generator - Complete LLVM code generation
+- ✅ Test suite - 8 automated tests, all passing
 
 ## Features
 
-Same language features as the OCaml implementation:
+Modern Scala-inspired syntax:
 
 - **Data Types**: Integer, Real, Boolean, Char, String
 - **Composite Types**: Arrays, Records (structs), Pointers
-- **Control Flow**: if/then/else, while, for loops
-- **Functions**: Functions and procedures with recursion
-- **Inline Declarations**: Scala-style `var` (mutable) and `val` (immutable)
+- **Control Flow**: `if (cond) { }`, `while (cond) { }`, `for (var = start to end) { }`
+- **Functions**: `def name(params): Type = { }` with recursion support
+- **Variable Declarations**: `var` (mutable) and `val` (immutable)
 - **I/O**: Console input/output (writeln, write, readln)
 - **Pointers**: Address-of (@), dereference (^), dynamic allocation (new)
+- **Comments**: `//` line comments and `/* */` block comments
 
 ## Prerequisites
 
