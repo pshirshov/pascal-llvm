@@ -67,6 +67,45 @@ object CodeGen:
       case -1 => throw CodegenError(s"Field $fieldName not found")
       case idx => idx
 
+  // Get a pointer to an lvalue expression (for assignments)
+  def codegenLValue(ctx: CodegenContext, expr: Expr): LLVMValueRef = expr match
+    case EVar(name) =>
+      ctx.namedValues.getOrElse(name,
+        throw CodegenError(s"Unknown variable: $name"))
+
+    case ERecordAccess(rec, field) =>
+      rec match
+        case EVar(varName) =>
+          // Get the record variable pointer
+          val recPtr = ctx.namedValues.getOrElse(varName,
+            throw CodegenError(s"Unknown variable: $varName"))
+
+          // Get the record type
+          val recType = ctx.varTypes.get(varName) match
+            case Some(t) => resolveType(ctx, t)
+            case None => throw CodegenError(s"Unknown variable type: $varName")
+
+          // Get field index
+          recType match
+            case TRecord(fields) =>
+              val fieldIdx = getFieldIndex(fields, field)
+
+              // Build GEP to access the field: indices are [0, fieldIdx]
+              val zero = LLVMConstInt(LLVMInt32TypeInContext(ctx.context), 0, 0)
+              val fieldIdxVal = LLVMConstInt(LLVMInt32TypeInContext(ctx.context), fieldIdx.toLong, 0)
+
+              val indices = new PointerPointer[LLVMValueRef](2)
+              indices.put(0, zero)
+              indices.put(1, fieldIdxVal)
+
+              LLVMBuildGEP2(ctx.builder, llTypeOfType(ctx, recType), recPtr, indices, 2, s"$varName.$field")
+
+            case _ => throw CodegenError(s"Variable $varName is not a record type")
+
+        case _ => throw CodegenError("Complex record expressions not yet supported")
+
+    case _ => throw CodegenError(s"Cannot assign to expression: $expr")
+
   def declareRuntimeFunctions(ctx: CodegenContext): (LLVMValueRef, LLVMValueRef, LLVMValueRef) =
     // printf: i32 (ptr, ...)
     val printfType = LLVMFunctionType(
@@ -170,9 +209,28 @@ object CodeGen:
       LLVMBuildLoad2(ctx.builder, LLVMInt32TypeInContext(ctx.context), elemPtr, "arrayval")
 
     case ERecordAccess(rec, field) =>
-      val recVal = codegenExpr(ctx, rec)
-      // Need to track record type to get field index
-      throw CodegenError("Record access not yet implemented")
+      rec match
+        case EVar(varName) =>
+          // Get the record type
+          val recType = ctx.varTypes.get(varName) match
+            case Some(t) => resolveType(ctx, t)
+            case None => throw CodegenError(s"Unknown variable type: $varName")
+
+          recType match
+            case TRecord(fields) =>
+              // Get pointer to the field
+              val fieldPtr = codegenLValue(ctx, ERecordAccess(rec, field))
+
+              // Get the field type
+              val fieldIdx = getFieldIndex(fields, field)
+              val fieldType = fields(fieldIdx).fieldType
+
+              // Load the field value
+              LLVMBuildLoad2(ctx.builder, llTypeOfType(ctx, fieldType), fieldPtr, s"$varName.$field.load")
+
+            case _ => throw CodegenError(s"Variable $varName is not a record type")
+
+        case _ => throw CodegenError("Complex record expressions not yet supported")
 
     case EDeref(ptr) =>
       val ptrVal = codegenExpr(ctx, ptr)
@@ -214,11 +272,7 @@ object CodeGen:
       LLVMBuildStore(ctx.builder, initVal, alloca)
 
     case SAssign(lval, rval) =>
-      val ptr = lval match
-        case EVar(name) =>
-          ctx.namedValues.getOrElse(name,
-            throw CodegenError(s"Unknown variable: $name"))
-        case _ => throw CodegenError("Can only assign to variables")
+      val ptr = codegenLValue(ctx, lval)
       val rvalExpr = codegenExpr(ctx, rval)
       LLVMBuildStore(ctx.builder, rvalExpr, ptr)
 
