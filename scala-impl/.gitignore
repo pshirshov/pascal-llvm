@@ -1,0 +1,33 @@
+# SBT
+target/
+project/target/
+project/project/
+
+# Metals (Scala IDE)
+.metals/
+.bloop/
+.bsp/
+metals.sbt
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Compiled files
+*.class
+*.jar
+*.o
+
+# Test artifacts
+test_output/
+
+# Nix
+result
+result-*
+
+# OS
+.DS_Store
+*.swp
+*.swo
+*~

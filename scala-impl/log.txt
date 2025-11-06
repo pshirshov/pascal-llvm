@@ -1,0 +1,9 @@
+[info] welcome to sbt 1.10.5 (N/A Java 21.0.9)
+[info] loading settings for project scala-impl-build from plugins.sbt ...
+[info] loading project definition from /home/pavel/work/safe/drafts/llvm-test/scala-impl/project
+[info] loading settings for project scala-impl from build.sbt ...
+[info] set current project to pascal-compiler (in build file:/home/pavel/work/safe/drafts/llvm-test/scala-impl/)
+[info] Executing in batch mode. For better performance use sbt's shell
+[info] compiling 5 Scala sources to /home/pavel/work/safe/drafts/llvm-test/scala-impl/target/scala-3.5.2/classes ...
+[info] done compiling
+[success] Total time: 8 s, completed 6 Nov 2025, 00:50:56

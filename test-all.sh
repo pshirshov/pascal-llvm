@@ -10,6 +10,7 @@ NC='\033[0m' # No Color
 
 OCAML_FAILED=0
 RUST_FAILED=0
+SCALA_FAILED=0
 
 echo "========================================="
 echo "Testing All Implementations"
@@ -57,10 +58,28 @@ cd ..
 
 echo ""
 echo "========================================="
+echo ""
+
+# Test Scala implementation
+echo -e "${BLUE}==> Testing Scala Implementation${NC}"
+echo ""
+cd scala-impl
+if nix develop --command ./test.sh 2>&1; then
+    echo ""
+    echo -e "${GREEN}✓ Scala implementation: All tests passed${NC}"
+else
+    SCALA_FAILED=1
+    echo ""
+    echo -e "${RED}✗ Scala implementation: Some tests failed${NC}"
+fi
+cd ..
+
+echo ""
+echo "========================================="
 echo "Summary"
 echo "========================================="
 
-if [ $OCAML_FAILED -eq 0 ] && [ $RUST_FAILED -eq 0 ]; then
+if [ $OCAML_FAILED -eq 0 ] && [ $RUST_FAILED -eq 0 ] && [ $SCALA_FAILED -eq 0 ]; then
     echo -e "${GREEN}All implementations passed!${NC}"
     exit 0
 else
@@ -69,6 +88,9 @@ else
     fi
     if [ $RUST_FAILED -ne 0 ]; then
         echo -e "${RED}✗ Rust implementation failed${NC}"
+    fi
+    if [ $SCALA_FAILED -ne 0 ]; then
+        echo -e "${RED}✗ Scala implementation failed${NC}"
     fi
     exit 1
 fi
