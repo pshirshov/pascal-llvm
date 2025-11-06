@@ -243,9 +243,15 @@ object Parser:
   ).map((name, params, localVars, body) =>
     FuncDecl(name, params.toList, None, localVars, body.toList))
 
-  def typeDecl[$: P]: P[TypeDecl] = P(
-    "type" ~ ws ~ identifier ~ ws ~ "=" ~ ws ~ typeExpr
+  // Single type declaration without 'type' keyword
+  def singleTypeDecl[$: P]: P[TypeDecl] = P(
+    identifier ~ ws ~ "=" ~ ws ~ typeExpr
   ).map((name, tpe) => TypeDecl(name, tpe))
+
+  // Type declaration with 'type' keyword (for backward compatibility)
+  def typeDecl[$: P]: P[TypeDecl] = P(
+    "type" ~ ws ~ singleTypeDecl
+  )
 
   def declaration[$: P]: P[Declaration] = P(
     typeDecl.map(DType.apply) |
@@ -261,10 +267,15 @@ object Parser:
     "var" ~ ws ~ varDecl.rep(sep = ws ~ ";" ~ ws)
   ).map(_.toList)
 
+  // Program with multiple type declarations
+  def programTypeDecls[$: P]: P[List[TypeDecl]] = P(
+    "type" ~ ws ~ (singleTypeDecl ~ ws ~ ";").rep(min = 1)
+  ).map(_.toList)
+
   def programDeclarations[$: P]: P[List[Declaration]] = P(
     (ws ~
      (programVarDecls.map(vars => vars.map(DVar.apply)) |
-      typeDecl.map(td => List(DType(td))) |
+      programTypeDecls.map(types => types.map(DType.apply)) |
       funcDecl.map(fd => List(DFunc(fd))) |
       procedureDecl.map(pd => List(DFunc(pd)))
      )
