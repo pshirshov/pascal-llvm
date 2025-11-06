@@ -1,11 +1,10 @@
 program InlineVal;
 
-function main(): integer;
-begin
-  val x: integer = 10;
-  val y: integer = 20;
-  writeln(x + y);
+def main(): Integer = {
+  val x: Integer = 10
+  val y: Integer = 20
+  writeln(x + y)
   return 0
-end;
+}
 
 .

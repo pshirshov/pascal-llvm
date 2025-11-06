@@ -2,11 +2,11 @@ program RecordLocal;
 
 type
   Point = record
-    x: integer;
-    y: integer;
+    x: Integer;
+    y: Integer;
   end;
 
-function test(): integer;
+function test(): Integer;
 var
   p: Point;
 begin
@@ -15,13 +15,10 @@ begin
   return p.x + p.y
 end;
 
-function main(): integer;
-var
-  result: integer;
-begin
-  result := test();
-  writeln(result);
+def main(): Integer = {
+  var result: Integer = test()
+  writeln(result)
   return 0
-end;
+}
 
 .

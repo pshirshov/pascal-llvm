@@ -1,24 +1,16 @@
 program ArithmeticTest;
 
-function compute(): integer;
-var
-  a: integer;
-  b: integer;
-  c: integer;
-begin
-  a := 10;
-  b := 5;
-  c := (a + b) * 2 - 10;
+def compute(): Integer = {
+  var a: Integer = 10
+  var b: Integer = 5
+  var c: Integer = (a + b) * 2 - 10
   return c
-end;
+}
 
-function main(): integer;
-var
-  result: integer;
-begin
-  result := compute();
-  writeln(result);
+def main(): Integer = {
+  var result: Integer = compute()
+  writeln(result)
   return 0
-end;
+}
 
 .

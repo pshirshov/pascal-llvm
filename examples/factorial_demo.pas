@@ -1,24 +1,17 @@
 program FactorialDemo;
 
-function factorial(n: integer): integer;
-var
-  result: integer;
-begin
-  if n <= 1 then begin
-    result := 1
-  end else begin
-    result := n * factorial(n - 1)
-  end;
-  return result
-end;
+def factorial(n: Integer): Integer = {
+  if (n <= 1) {
+    return 1
+  } else {
+    return n * factorial(n - 1)
+  }
+}
 
-function main(): integer;
-var
-  value: integer;
-begin
-  value := factorial(5);
-  writeln(value);
+def main(): Integer = {
+  var value: Integer = factorial(5)
+  writeln(value)
   return 0
-end;
+}
 
 .

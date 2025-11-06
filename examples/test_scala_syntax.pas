@@ -1,4 +1,4 @@
-program Test2;
+program TestScala;
 
 def main(): Integer = {
   var x: Integer = 42

@@ -15,6 +15,7 @@ pub enum Token {
     Var,
     Val,
     Type,
+    Def,
     Function,
     Procedure,
     Begin,
@@ -61,6 +62,8 @@ pub enum Token {
     RParen,      // )
     LBrack,      // [
     RBrack,      // ]
+    LBrace,      // {
+    RBrace,      // }
     Dot,         // .
     Comma,       // ,
     Colon,       // :
@@ -205,6 +208,7 @@ impl Lexer {
             "var" => Token::Var,
             "val" => Token::Val,
             "type" => Token::Type,
+            "def" => Token::Def,
             "function" => Token::Function,
             "procedure" => Token::Procedure,
             "begin" => Token::Begin,
@@ -295,6 +299,14 @@ impl Lexer {
                 ']' => {
                     self.advance();
                     return Token::RBrack;
+                }
+                '{' => {
+                    self.advance();
+                    return Token::LBrace;
+                }
+                '}' => {
+                    self.advance();
+                    return Token::RBrace;
                 }
                 '.' => {
                     if self.peek(1) == Some('.') {

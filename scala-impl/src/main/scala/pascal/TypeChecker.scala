@@ -107,13 +107,15 @@ object TypeChecker:
       val idxType = checkExpr(symtab, idx)
       if !typesEqual(idxType, TInteger) then
         throw TypeError("Array index must be integer")
-      arrType match
+      val arrTypeResolved = resolveType(symtab, arrType)
+      arrTypeResolved match
         case TArray(elemType, _) => elemType
         case _ => throw TypeError("Array access on non-array type")
 
     case ERecordAccess(recExpr, field) =>
       val recType = checkExpr(symtab, recExpr)
-      recType match
+      val recTypeResolved = resolveType(symtab, recType)
+      recTypeResolved match
         case TRecord(fields) =>
           fields.find(_.fieldName == field) match
             case Some(f) => f.fieldType
@@ -188,12 +190,20 @@ object TypeChecker:
         throw TypeError("While condition must be boolean")
       body.foreach(checkStmt(symtab, returnType, _))
 
-    case SFor(_, start, stop, body) =>
+    case SFor(varName, start, stop, body) =>
       val startType = checkExpr(symtab, start)
       val stopType = checkExpr(symtab, stop)
       if !(typesEqual(startType, TInteger) && typesEqual(stopType, TInteger)) then
         throw TypeError("For loop bounds must be integers")
-      body.foreach(checkStmt(symtab, returnType, _))
+      // Add loop variable to symbol table temporarily
+      val oldVar = symtab.vars.get(varName)
+      symtab.vars(varName) = TInteger
+      try
+        body.foreach(checkStmt(symtab, returnType, _))
+      finally
+        oldVar match
+          case Some(oldType) => symtab.vars(varName) = oldType
+          case None => symtab.vars -= varName
 
     case SWriteln(exprs) =>
       exprs.foreach(e => checkExpr(symtab, e))

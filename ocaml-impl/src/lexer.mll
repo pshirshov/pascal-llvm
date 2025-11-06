@@ -10,10 +10,11 @@ let () =
       "var", VAR;
       "val", VAL;
       "type", TYPE;
-      "function", FUNCTION;
-      "procedure", PROCEDURE;
-      "begin", BEGIN;
-      "end", END;
+      "def", DEF;
+      "function", FUNCTION;  (* Keep for backward compatibility *)
+      "procedure", PROCEDURE;  (* Keep for backward compatibility *)
+      "begin", BEGIN;  (* Keep for backward compatibility *)
+      "end", END;  (* Keep for backward compatibility *)
       "if", IF;
       "then", THEN;
       "else", ELSE;
@@ -25,10 +26,15 @@ let () =
       "of", OF;
       "array", ARRAY;
       "record", RECORD;
-      "integer", TINTEGER;
+      "Integer", TINTEGER;
+      "integer", TINTEGER;  (* Keep lowercase for backward compatibility *)
+      "Real", TREAL;
       "real", TREAL;
+      "Boolean", TBOOLEAN;
       "boolean", TBOOLEAN;
+      "Char", TCHAR;
       "char", TCHAR;
+      "String", TSTRING;
       "string", TSTRING;
       "true", TRUE;
       "false", FALSE;
@@ -62,6 +68,8 @@ rule token = parse
   | ')'           { RPAREN }
   | '['           { LBRACK }
   | ']'           { RBRACK }
+  | '{'           { LBRACE }
+  | '}'           { RBRACE }
   | '.'           { DOT }
   | ','           { COMMA }
   | ':'           { COLON }

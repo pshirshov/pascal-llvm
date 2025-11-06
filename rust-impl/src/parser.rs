@@ -106,6 +106,7 @@ impl Parser {
         match &self.current_token {
             Token::Type => self.parse_type_decl(),
             Token::Function | Token::Procedure => self.parse_func_decl(),
+            Token::Def => self.parse_def_decl(),
             _ => Err(ParseError {
                 message: format!("Expected declaration, got {:?}", self.current_token),
             }),
@@ -226,6 +227,79 @@ impl Parser {
         }))
     }
 
+    fn parse_def_decl(&mut self) -> Result<Declaration, ParseError> {
+        self.expect(Token::Def)?;
+        let func_name = self.expect_ident()?;
+        self.expect(Token::LParen)?;
+
+        // Parse parameters (comma-separated, Scala style)
+        let mut params = Vec::new();
+        if self.current_token != Token::RParen {
+            loop {
+                let param_name = self.expect_ident()?;
+                self.expect(Token::Colon)?;
+                let param_type = self.parse_type_expr()?;
+                params.push(Param {
+                    param_name,
+                    param_type,
+                });
+
+                if self.current_token == Token::Comma {
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+        }
+
+        self.expect(Token::RParen)?;
+
+        // Parse optional return type
+        let return_type = if self.current_token == Token::Colon {
+            self.advance();
+            Some(self.parse_type_expr()?)
+        } else {
+            None
+        };
+
+        self.expect(Token::Eq)?;
+
+        // Parse body - could be brace block or old-style begin/end
+        let body = if self.current_token == Token::LBrace {
+            self.parse_brace_block()?
+        } else {
+            self.expect(Token::Begin)?;
+            let stmts = self.parse_stmt_list()?;
+            self.expect(Token::End)?;
+            self.expect(Token::Semicolon)?;
+            stmts
+        };
+
+        Ok(Declaration::DFunc(FuncDecl {
+            func_name,
+            params,
+            return_type,
+            local_vars: Vec::new(), // Def style doesn't have separate var section
+            body,
+        }))
+    }
+
+    fn parse_brace_block(&mut self) -> Result<Vec<Stmt>, ParseError> {
+        self.expect(Token::LBrace)?;
+        let mut stmts = Vec::new();
+
+        while self.current_token != Token::RBrace {
+            stmts.push(self.parse_stmt()?);
+            // Optional semicolon
+            if self.current_token == Token::Semicolon {
+                self.advance();
+            }
+        }
+
+        self.expect(Token::RBrace)?;
+        Ok(stmts)
+    }
+
     fn parse_type_expr(&mut self) -> Result<TypeExpr, ParseError> {
         match &self.current_token {
             Token::TInteger => {
@@ -334,9 +408,15 @@ impl Parser {
         let name = self.expect_ident()?;
         self.expect(Token::Colon)?;
         let var_type = self.parse_type_expr()?;
-        self.expect(Token::Assign)?;
-        let init = self.parse_expr()?;
-        Ok(Stmt::SVarDecl(name, var_type, init))
+        // Accept both := and =
+        if self.current_token == Token::Assign || self.current_token == Token::Eq {
+            self.advance();
+            let init = self.parse_expr()?;
+            Ok(Stmt::SVarDecl(name, var_type, init))
+        } else {
+            // Allow var declaration without initialization (default to 0)
+            Ok(Stmt::SVarDecl(name, var_type, Expr::EInteger(0)))
+        }
     }
 
     fn parse_val_stmt(&mut self) -> Result<Stmt, ParseError> {
@@ -351,29 +431,45 @@ impl Parser {
 
     fn parse_if_stmt(&mut self) -> Result<Stmt, ParseError> {
         self.expect(Token::If)?;
-        let cond = self.parse_expr()?;
-        self.expect(Token::Then)?;
 
-        let mut then_stmts = Vec::new();
-        if self.current_token == Token::Begin {
+        // Support both old (if cond then) and new (if (cond)) syntax
+        let has_paren = self.current_token == Token::LParen;
+        if has_paren {
             self.advance();
-            then_stmts = self.parse_stmt_list()?;
-            self.expect(Token::End)?;
-        } else {
-            then_stmts.push(self.parse_stmt()?);
         }
+
+        let cond = self.parse_expr()?;
+
+        if has_paren {
+            self.expect(Token::RParen)?;
+        } else {
+            self.expect(Token::Then)?;
+        }
+
+        // Parse then block - could be begin/end, braces, or single statement
+        let then_stmts = if self.current_token == Token::LBrace {
+            self.parse_brace_block()?
+        } else if self.current_token == Token::Begin {
+            self.advance();
+            let stmts = self.parse_stmt_list()?;
+            self.expect(Token::End)?;
+            stmts
+        } else {
+            vec![self.parse_stmt()?]
+        };
 
         let else_stmts = if self.current_token == Token::Else {
             self.advance();
-            let mut stmts = Vec::new();
-            if self.current_token == Token::Begin {
+            if self.current_token == Token::LBrace {
+                Some(self.parse_brace_block()?)
+            } else if self.current_token == Token::Begin {
                 self.advance();
-                stmts = self.parse_stmt_list()?;
+                let stmts = self.parse_stmt_list()?;
                 self.expect(Token::End)?;
+                Some(stmts)
             } else {
-                stmts.push(self.parse_stmt()?);
+                Some(vec![self.parse_stmt()?])
             }
-            Some(stmts)
         } else {
             None
         };
@@ -383,25 +479,54 @@ impl Parser {
 
     fn parse_while_stmt(&mut self) -> Result<Stmt, ParseError> {
         self.expect(Token::While)?;
-        let cond = self.parse_expr()?;
-        self.expect(Token::Do)?;
 
-        let mut body = Vec::new();
-        if self.current_token == Token::Begin {
+        // Support both old (while cond do) and new (while (cond)) syntax
+        let has_paren = self.current_token == Token::LParen;
+        if has_paren {
             self.advance();
-            body = self.parse_stmt_list()?;
-            self.expect(Token::End)?;
-        } else {
-            body.push(self.parse_stmt()?);
         }
+
+        let cond = self.parse_expr()?;
+
+        if has_paren {
+            self.expect(Token::RParen)?;
+        } else {
+            self.expect(Token::Do)?;
+        }
+
+        // Parse body - could be begin/end, braces, or single statement
+        let body = if self.current_token == Token::LBrace {
+            self.parse_brace_block()?
+        } else if self.current_token == Token::Begin {
+            self.advance();
+            let stmts = self.parse_stmt_list()?;
+            self.expect(Token::End)?;
+            stmts
+        } else {
+            vec![self.parse_stmt()?]
+        };
 
         Ok(Stmt::SWhile(cond, body))
     }
 
     fn parse_for_stmt(&mut self) -> Result<Stmt, ParseError> {
         self.expect(Token::For)?;
+
+        // Support both old (for i := 1 to n do) and new (for (i = 1 to n)) syntax
+        let has_paren = self.current_token == Token::LParen;
+        if has_paren {
+            self.advance();
+        }
+
         let var = self.expect_ident()?;
-        self.expect(Token::Assign)?;
+        // Accept both := and =
+        if self.current_token == Token::Assign || self.current_token == Token::Eq {
+            self.advance();
+        } else {
+            return Err(ParseError {
+                message: "Expected := or = in for loop".to_string(),
+            });
+        }
         let start = self.parse_expr()?;
 
         let _ascending = match self.current_token {
@@ -421,16 +546,24 @@ impl Parser {
         };
 
         let end = self.parse_expr()?;
-        self.expect(Token::Do)?;
 
-        let mut body = Vec::new();
-        if self.current_token == Token::Begin {
-            self.advance();
-            body = self.parse_stmt_list()?;
-            self.expect(Token::End)?;
+        if has_paren {
+            self.expect(Token::RParen)?;
         } else {
-            body.push(self.parse_stmt()?);
+            self.expect(Token::Do)?;
         }
+
+        // Parse body - could be braces, begin/end, or single statement
+        let body = if self.current_token == Token::LBrace {
+            self.parse_brace_block()?
+        } else if self.current_token == Token::Begin {
+            self.advance();
+            let stmts = self.parse_stmt_list()?;
+            self.expect(Token::End)?;
+            stmts
+        } else {
+            vec![self.parse_stmt()?]
+        };
 
         // For downto loops, we'll store the end expr as-is and handle it in codegen
         Ok(Stmt::SFor(var, start, end, body))
@@ -510,21 +643,79 @@ impl Parser {
     }
 
     fn parse_assign_or_call_stmt(&mut self) -> Result<Stmt, ParseError> {
-        let expr = self.parse_expr()?;
+        // Parse an lvalue (identifier with possible array/record access)
+        let lval = self.parse_lvalue()?;
 
-        // Check if this is an assignment
-        if self.current_token == Token::Assign {
+        // Check if this is a procedure call (only simple identifiers can be called)
+        if self.current_token == Token::LParen {
+            if let Expr::EVar(name) = lval {
+                self.advance(); // consume '('
+                let mut args = Vec::new();
+                if self.current_token != Token::RParen {
+                    loop {
+                        args.push(self.parse_expr()?);
+                        if self.current_token == Token::Comma {
+                            self.advance();
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                self.expect(Token::RParen)?;
+                Ok(Stmt::SCall(name, args))
+            } else {
+                Err(ParseError {
+                    message: "Cannot call complex lvalue".to_string(),
+                })
+            }
+        }
+        // Check if this is an assignment (accept both := and =)
+        else if self.current_token == Token::Assign || self.current_token == Token::Eq {
             self.advance();
             let rval = self.parse_expr()?;
-            Ok(Stmt::SAssign(expr, rval))
-        } else if let Expr::ECall(name, args) = expr {
-            // It's a procedure call
-            Ok(Stmt::SCall(name, args))
+            Ok(Stmt::SAssign(lval, rval))
         } else {
             Err(ParseError {
                 message: "Expected assignment or procedure call".to_string(),
             })
         }
+    }
+
+    fn parse_lvalue(&mut self) -> Result<Expr, ParseError> {
+        // Parse a primary lvalue (identifier)
+        let mut lval = if let Token::Ident(name) = &self.current_token {
+            let name = name.clone();
+            self.advance();
+            Expr::EVar(name)
+        } else {
+            return Err(ParseError {
+                message: "Expected identifier".to_string(),
+            });
+        };
+
+        // Parse postfix operations (array access, record access, dereference)
+        loop {
+            match &self.current_token {
+                Token::LBrack => {
+                    self.advance();
+                    let index = self.parse_expr()?;
+                    self.expect(Token::RBrack)?;
+                    lval = Expr::EArrayAccess(Box::new(lval), Box::new(index));
+                }
+                Token::Dot => {
+                    self.advance();
+                    let field = self.expect_ident()?;
+                    lval = Expr::ERecordAccess(Box::new(lval), field);
+                }
+                Token::Caret => {
+                    self.advance();
+                    lval = Expr::EDeref(Box::new(lval));
+                }
+                _ => break,
+            }
+        }
+
+        Ok(lval)
     }
 
     fn parse_expr(&mut self) -> Result<Expr, ParseError> {

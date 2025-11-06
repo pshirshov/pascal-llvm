@@ -385,52 +385,14 @@ impl<'ctx> CodegenContext<'ctx> {
                     .expect("Failed to build load"))
             }
 
-            Expr::ERecordAccess(rec_expr, field) => {
-                // Only support direct variable access for now
-                if let Expr::EVar(var_name) = &**rec_expr {
-                    let rec_type = self
-                        .var_types
-                        .get(var_name)
-                        .ok_or_else(|| CodegenError::UnknownVariable(var_name.clone()))?;
-                    let resolved = self.resolve_type(rec_type)?;
-
-                    if let TypeExpr::TRecord(fields) = resolved {
-                        let field_idx = Self::get_field_index(&fields, field)
-                            .ok_or_else(|| CodegenError::NoSuchField(field.clone()))?;
-
-                        let zero = self.context.i32_type().const_int(0, false);
-                        let field_idx_val = self.context.i32_type().const_int(field_idx as u64, false);
-                        let rec_lltype = self.lltype_of_type(&TypeExpr::TRecord(fields.clone()))?;
-
-                        let rec_ptr = *self
-                            .named_values
-                            .get(var_name)
-                            .ok_or_else(|| CodegenError::UnknownVariable(var_name.clone()))?;
-
-                        let field_ptr = unsafe {
-                            self.builder
-                                .build_gep(
-                                    rec_lltype,
-                                    rec_ptr,
-                                    &[zero, field_idx_val],
-                                    &format!("{}.{}", var_name, field),
-                                )
-                                .expect("Failed to build GEP")
-                        };
-
-                        let field_type = &fields[field_idx].field_type;
-                        let field_lltype = self.lltype_of_type(field_type)?;
-
-                        Ok(self
-                            .builder
-                            .build_load(field_lltype, field_ptr, "fieldload")
-                            .expect("Failed to build load"))
-                    } else {
-                        Err(CodegenError::RecordAccessOnNonRecord)
-                    }
-                } else {
-                    Err(CodegenError::ComplexRecordExpr)
-                }
+            Expr::ERecordAccess(_, _) => {
+                let field_ptr = self.codegen_lvalue(expr)?;
+                let field_type = self.get_expr_type(expr)?;
+                let field_lltype = self.lltype_of_type(&field_type)?;
+                Ok(self
+                    .builder
+                    .build_load(field_lltype, field_ptr, "fieldload")
+                    .expect("Failed to build load"))
             }
 
             Expr::EDeref(ptr) => {
@@ -477,6 +439,37 @@ impl<'ctx> CodegenContext<'ctx> {
         }
     }
 
+    // Helper to get the type of an expression
+    fn get_expr_type(&self, expr: &Expr) -> Result<TypeExpr, CodegenError> {
+        match expr {
+            Expr::EVar(name) => {
+                let ty = self.var_types.get(name)
+                    .ok_or_else(|| CodegenError::UnknownVariable(name.clone()))?;
+                self.resolve_type(ty)
+            }
+            Expr::ERecordAccess(rec_expr, field) => {
+                let rec_type = self.resolve_type(&self.get_expr_type(rec_expr)?)?;
+                if let TypeExpr::TRecord(fields) = rec_type {
+                    let field_def = fields.iter()
+                        .find(|f| &f.field_name == field)
+                        .ok_or_else(|| CodegenError::NoSuchField(field.clone()))?;
+                    self.resolve_type(&field_def.field_type)
+                } else {
+                    Err(CodegenError::RecordAccessOnNonRecord)
+                }
+            }
+            Expr::EArrayAccess(arr_expr, _) => {
+                let arr_type = self.resolve_type(&self.get_expr_type(arr_expr)?)?;
+                if let TypeExpr::TArray(elem_type, _) = arr_type {
+                    self.resolve_type(&elem_type)
+                } else {
+                    Err(CodegenError::InvalidLValue)
+                }
+            }
+            _ => Err(CodegenError::InvalidLValue),
+        }
+    }
+
     fn codegen_lvalue(&mut self, expr: &Expr) -> Result<PointerValue<'ctx>, CodegenError> {
         match expr {
             Expr::EVar(name) => {
@@ -487,55 +480,46 @@ impl<'ctx> CodegenContext<'ctx> {
                 Ok(*ptr)
             }
             Expr::EArrayAccess(arr, idx) => {
-                let arr_val = self.codegen_expr(arr)?;
+                let arr_ptr = self.codegen_lvalue(arr)?;
                 let idx_val = self.codegen_expr(idx)?;
+                let arr_type = self.resolve_type(&self.get_expr_type(arr)?)?;
+                let arr_lltype = self.lltype_of_type(&arr_type)?;
+                let zero = self.context.i32_type().const_int(0, false);
                 Ok(unsafe {
                     self.builder
                         .build_gep(
-                            arr_val.get_type(),
-                            arr_val.into_pointer_value(),
-                            &[idx_val.into_int_value()],
-                            "arraylval",
+                            arr_lltype,
+                            arr_ptr,
+                            &[zero, idx_val.into_int_value()],
+                            "arrayptr",
                         )
                         .expect("Failed to build GEP")
                 })
             }
             Expr::ERecordAccess(rec_expr, field) => {
-                if let Expr::EVar(var_name) = &**rec_expr {
-                    let rec_type = self
-                        .var_types
-                        .get(var_name)
-                        .ok_or_else(|| CodegenError::UnknownVariable(var_name.clone()))?;
-                    let resolved = self.resolve_type(rec_type)?;
+                let rec_ptr = self.codegen_lvalue(rec_expr)?;
+                let rec_type = self.resolve_type(&self.get_expr_type(rec_expr)?)?;
 
-                    if let TypeExpr::TRecord(fields) = resolved.clone() {
-                        let field_idx = Self::get_field_index(&fields, field)
-                            .ok_or_else(|| CodegenError::NoSuchField(field.clone()))?;
+                if let TypeExpr::TRecord(fields) = rec_type.clone() {
+                    let field_idx = Self::get_field_index(&fields, field)
+                        .ok_or_else(|| CodegenError::NoSuchField(field.clone()))?;
 
-                        let zero = self.context.i32_type().const_int(0, false);
-                        let field_idx_val = self.context.i32_type().const_int(field_idx as u64, false);
-                        let rec_lltype = self.lltype_of_type(&TypeExpr::TRecord(fields))?;
+                    let zero = self.context.i32_type().const_int(0, false);
+                    let field_idx_val = self.context.i32_type().const_int(field_idx as u64, false);
+                    let rec_lltype = self.lltype_of_type(&rec_type)?;
 
-                        let rec_ptr = *self
-                            .named_values
-                            .get(var_name)
-                            .ok_or_else(|| CodegenError::UnknownVariable(var_name.clone()))?;
-
-                        Ok(unsafe {
-                            self.builder
-                                .build_gep(
-                                    rec_lltype,
-                                    rec_ptr,
-                                    &[zero, field_idx_val],
-                                    &format!("{}.{}_ptr", var_name, field),
-                                )
-                                .expect("Failed to build GEP")
-                        })
-                    } else {
-                        Err(CodegenError::RecordAccessOnNonRecord)
-                    }
+                    Ok(unsafe {
+                        self.builder
+                            .build_gep(
+                                rec_lltype,
+                                rec_ptr,
+                                &[zero, field_idx_val],
+                                "fieldptr",
+                            )
+                            .expect("Failed to build GEP")
+                    })
                 } else {
-                    Err(CodegenError::ComplexRecordExpr)
+                    Err(CodegenError::RecordAccessOnNonRecord)
                 }
             }
             Expr::EDeref(ptr) => {
@@ -600,9 +584,13 @@ impl<'ctx> CodegenContext<'ctx> {
                 for stmt in then_stmts {
                     self.codegen_stmt(stmt)?;
                 }
-                self.builder
-                    .build_unconditional_branch(merge_bb)
-                    .expect("Failed to build branch");
+                let then_bb_end = self.builder.get_insert_block().expect("No insert block");
+                let then_terminated = then_bb_end.get_terminator().is_some();
+                if !then_terminated {
+                    self.builder
+                        .build_unconditional_branch(merge_bb)
+                        .expect("Failed to build branch");
+                }
 
                 // Else block
                 self.builder.position_at_end(else_bb);
@@ -611,12 +599,20 @@ impl<'ctx> CodegenContext<'ctx> {
                         self.codegen_stmt(stmt)?;
                     }
                 }
-                self.builder
-                    .build_unconditional_branch(merge_bb)
-                    .expect("Failed to build branch");
+                let else_bb_end = self.builder.get_insert_block().expect("No insert block");
+                let else_terminated = else_bb_end.get_terminator().is_some();
+                if !else_terminated {
+                    self.builder
+                        .build_unconditional_branch(merge_bb)
+                        .expect("Failed to build branch");
+                }
 
                 // Merge block
                 self.builder.position_at_end(merge_bb);
+                // If both branches are terminated, this block is unreachable
+                if then_terminated && else_terminated {
+                    self.builder.build_unreachable().expect("Failed to build unreachable");
+                }
                 Ok(())
             }
 
@@ -659,10 +655,18 @@ impl<'ctx> CodegenContext<'ctx> {
 
             Stmt::SFor(var, start, stop, body) => {
                 let start_val = self.codegen_expr(start)?;
-                let var_ptr = *self
-                    .named_values
-                    .get(var)
-                    .ok_or_else(|| CodegenError::UnknownLoopVariable(var.clone()))?;
+                // Auto-allocate loop variable if it doesn't exist
+                let var_ptr = if let Some(ptr) = self.named_values.get(var) {
+                    *ptr
+                } else {
+                    let alloca = self
+                        .builder
+                        .build_alloca(self.context.i32_type(), var)
+                        .expect("Failed to build alloca");
+                    self.named_values.insert(var.clone(), alloca);
+                    self.var_types.insert(var.clone(), TypeExpr::TInteger);
+                    alloca
+                };
                 self.builder
                     .build_store(var_ptr, start_val)
                     .expect("Failed to build store");

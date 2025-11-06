@@ -68,41 +68,73 @@ object CodeGen:
       case idx => idx
 
   // Get a pointer to an lvalue expression (for assignments)
+  // Get the type of an expression
+  def getExprType(ctx: CodegenContext, expr: Expr): TypeExpr = expr match
+    case EVar(name) =>
+      ctx.varTypes.getOrElse(name,
+        throw CodegenError(s"Unknown variable type: $name"))
+
+    case EArrayAccess(arr, _) =>
+      val arrType = resolveType(ctx, getExprType(ctx, arr))
+      arrType match
+        case TArray(elemType, _) => elemType
+        case _ => throw CodegenError("Array access on non-array type")
+
+    case ERecordAccess(rec, field) =>
+      val recType = resolveType(ctx, getExprType(ctx, rec))
+      recType match
+        case TRecord(fields) =>
+          fields.find(_.fieldName == field) match
+            case Some(f) => f.fieldType
+            case None => throw CodegenError(s"Record has no field: $field")
+        case _ => throw CodegenError("Record access on non-record type")
+
+    case _ => throw CodegenError(s"Cannot get type of expression: $expr")
+
   def codegenLValue(ctx: CodegenContext, expr: Expr): LLVMValueRef = expr match
     case EVar(name) =>
       ctx.namedValues.getOrElse(name,
         throw CodegenError(s"Unknown variable: $name"))
 
+    case EArrayAccess(arr, idx) =>
+      // Recursively get pointer to the array
+      val arrPtr = codegenLValue(ctx, arr)
+      val idxVal = codegenExpr(ctx, idx)
+
+      // Get the array type
+      val arrType = resolveType(ctx, getExprType(ctx, arr))
+
+      // Build GEP with indices [0, idx]
+      val zero = LLVMConstInt(LLVMInt32TypeInContext(ctx.context), 0, 0)
+      val indices = new PointerPointer[LLVMValueRef](2)
+      indices.put(0, zero)
+      indices.put(1, idxVal)
+
+      LLVMBuildGEP2(ctx.builder, llTypeOfType(ctx, arrType), arrPtr, indices, 2, "arrayptr")
+
     case ERecordAccess(rec, field) =>
-      rec match
-        case EVar(varName) =>
-          // Get the record variable pointer
-          val recPtr = ctx.namedValues.getOrElse(varName,
-            throw CodegenError(s"Unknown variable: $varName"))
+      // Recursively get pointer to the record
+      val recPtr = codegenLValue(ctx, rec)
 
-          // Get the record type
-          val recType = ctx.varTypes.get(varName) match
-            case Some(t) => resolveType(ctx, t)
-            case None => throw CodegenError(s"Unknown variable type: $varName")
+      // Get the record type
+      val recType = resolveType(ctx, getExprType(ctx, rec))
 
-          // Get field index
-          recType match
-            case TRecord(fields) =>
-              val fieldIdx = getFieldIndex(fields, field)
+      // Get field index
+      recType match
+        case TRecord(fields) =>
+          val fieldIdx = getFieldIndex(fields, field)
 
-              // Build GEP to access the field: indices are [0, fieldIdx]
-              val zero = LLVMConstInt(LLVMInt32TypeInContext(ctx.context), 0, 0)
-              val fieldIdxVal = LLVMConstInt(LLVMInt32TypeInContext(ctx.context), fieldIdx.toLong, 0)
+          // Build GEP to access the field: indices are [0, fieldIdx]
+          val zero = LLVMConstInt(LLVMInt32TypeInContext(ctx.context), 0, 0)
+          val fieldIdxVal = LLVMConstInt(LLVMInt32TypeInContext(ctx.context), fieldIdx.toLong, 0)
 
-              val indices = new PointerPointer[LLVMValueRef](2)
-              indices.put(0, zero)
-              indices.put(1, fieldIdxVal)
+          val indices = new PointerPointer[LLVMValueRef](2)
+          indices.put(0, zero)
+          indices.put(1, fieldIdxVal)
 
-              LLVMBuildGEP2(ctx.builder, llTypeOfType(ctx, recType), recPtr, indices, 2, s"$varName.$field")
+          LLVMBuildGEP2(ctx.builder, llTypeOfType(ctx, recType), recPtr, indices, 2, s"field.$field")
 
-            case _ => throw CodegenError(s"Variable $varName is not a record type")
-
-        case _ => throw CodegenError("Complex record expressions not yet supported")
+        case _ => throw CodegenError("Record access on non-record type")
 
     case _ => throw CodegenError(s"Cannot assign to expression: $expr")
 
@@ -209,28 +241,14 @@ object CodeGen:
       LLVMBuildLoad2(ctx.builder, LLVMInt32TypeInContext(ctx.context), elemPtr, "arrayval")
 
     case ERecordAccess(rec, field) =>
-      rec match
-        case EVar(varName) =>
-          // Get the record type
-          val recType = ctx.varTypes.get(varName) match
-            case Some(t) => resolveType(ctx, t)
-            case None => throw CodegenError(s"Unknown variable type: $varName")
+      // Get pointer to the field using the recursive lvalue handler
+      val fieldPtr = codegenLValue(ctx, ERecordAccess(rec, field))
 
-          recType match
-            case TRecord(fields) =>
-              // Get pointer to the field
-              val fieldPtr = codegenLValue(ctx, ERecordAccess(rec, field))
+      // Get the field type
+      val fieldType = getExprType(ctx, ERecordAccess(rec, field))
 
-              // Get the field type
-              val fieldIdx = getFieldIndex(fields, field)
-              val fieldType = fields(fieldIdx).fieldType
-
-              // Load the field value
-              LLVMBuildLoad2(ctx.builder, llTypeOfType(ctx, fieldType), fieldPtr, s"$varName.$field.load")
-
-            case _ => throw CodegenError(s"Variable $varName is not a record type")
-
-        case _ => throw CodegenError("Complex record expressions not yet supported")
+      // Load the field value
+      LLVMBuildLoad2(ctx.builder, llTypeOfType(ctx, fieldType), fieldPtr, "field.load")
 
     case EDeref(ptr) =>
       val ptrVal = codegenExpr(ctx, ptr)
@@ -293,13 +311,20 @@ object CodeGen:
 
           LLVMPositionBuilderAtEnd(ctx.builder, thenBB)
           thenBranch.foreach(codegenStmt(ctx, _))
-          if LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(ctx.builder)) == null then
+          val thenTerminated = LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(ctx.builder)) != null
+          if !thenTerminated then
             LLVMBuildBr(ctx.builder, mergeBB)
 
           LLVMPositionBuilderAtEnd(ctx.builder, elseBB)
           stmts.foreach(codegenStmt(ctx, _))
-          if LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(ctx.builder)) == null then
+          val elseTerminated = LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(ctx.builder)) != null
+          if !elseTerminated then
             LLVMBuildBr(ctx.builder, mergeBB)
+
+          // If both branches are terminated, the merge block is unreachable
+          LLVMPositionBuilderAtEnd(ctx.builder, mergeBB)
+          if thenTerminated && elseTerminated then
+            LLVMBuildUnreachable(ctx.builder)
 
         case None =>
           LLVMBuildCondBr(ctx.builder, condVal, thenBB, mergeBB)
@@ -309,7 +334,7 @@ object CodeGen:
           if LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(ctx.builder)) == null then
             LLVMBuildBr(ctx.builder, mergeBB)
 
-      LLVMPositionBuilderAtEnd(ctx.builder, mergeBB)
+          LLVMPositionBuilderAtEnd(ctx.builder, mergeBB)
 
     case SWhile(cond, body) =>
       val func = LLVMGetBasicBlockParent(LLVMGetInsertBlock(ctx.builder))

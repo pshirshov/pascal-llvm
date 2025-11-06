@@ -177,7 +177,8 @@ fn check_expr(symtab: &SymbolTable, expr: &Expr) -> Result<TypeExpr, TypeError> 
                 return Err(TypeError("Array index must be integer".to_string()));
             }
 
-            match arr_type {
+            let arr_type_resolved = resolve_type(symtab, &arr_type)?;
+            match arr_type_resolved {
                 TypeExpr::TArray(elem_type, _) => Ok(*elem_type),
                 _ => Err(TypeError("Array access on non-array type".to_string())),
             }
@@ -185,7 +186,8 @@ fn check_expr(symtab: &SymbolTable, expr: &Expr) -> Result<TypeExpr, TypeError> 
 
         Expr::ERecordAccess(rec_expr, field) => {
             let rec_type = check_expr(symtab, rec_expr)?;
-            match rec_type {
+            let rec_type_resolved = resolve_type(symtab, &rec_type)?;
+            match rec_type_resolved {
                 TypeExpr::TRecord(fields) => fields
                     .iter()
                     .find(|f| f.field_name == *field)
@@ -316,7 +318,7 @@ fn check_stmt(
             Ok(())
         }
 
-        Stmt::SFor(_var, start, stop, body) => {
+        Stmt::SFor(var, start, stop, body) => {
             let start_type = check_expr(symtab, start)?;
             let stop_type = check_expr(symtab, stop)?;
             if !types_equal(&start_type, &TypeExpr::TInteger)
@@ -324,8 +326,16 @@ fn check_stmt(
             {
                 return Err(TypeError("For loop bounds must be integers".to_string()));
             }
+            // Add loop variable to symbol table temporarily
+            let old_var = symtab.vars.insert(var.clone(), TypeExpr::TInteger);
             for stmt in body {
                 check_stmt(symtab, return_type, stmt)?;
+            }
+            // Restore old value
+            if let Some(old_type) = old_var {
+                symtab.vars.insert(var.clone(), old_type);
+            } else {
+                symtab.vars.remove(var);
             }
             Ok(())
         }

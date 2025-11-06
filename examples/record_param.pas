@@ -2,19 +2,18 @@ program RecordParam;
 
 type
   Point = record
-    x: integer;
-    y: integer;
+    x: Integer;
+    y: Integer;
   end;
 
-function sum_point(p: Point): integer;
-begin
+def sum_point(p: Point): Integer = {
   return p.x + p.y
-end;
+}
 
-function main(): integer;
+function main(): Integer;
 var
   pt: Point;
-  result: integer;
+  result: Integer;
 begin
   pt.x := 15;
   pt.y := 25;

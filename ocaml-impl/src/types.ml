@@ -107,7 +107,8 @@ let rec check_expr symtab expr =
 
   | ERecordAccess (rec_expr, field) ->
       let rec_type = check_expr symtab rec_expr in
-      (match rec_type with
+      let resolved_type = resolve_type symtab rec_type in
+      (match resolved_type with
        | TRecord fields ->
            (match List.find_opt (fun f -> f.field_name = field) fields with
             | Some f -> f.field_type
@@ -184,12 +185,19 @@ let rec check_stmt symtab return_type stmt =
         raise (Type_error "While condition must be boolean");
       List.iter (check_stmt symtab return_type) body
 
-  | SFor (_var, start, stop, body) ->
+  | SFor (var, start, stop, body) ->
       let start_type = check_expr symtab start in
       let stop_type = check_expr symtab stop in
       if not (types_equal start_type TInteger && types_equal stop_type TInteger) then
         raise (Type_error "For loop bounds must be integers");
-      List.iter (check_stmt symtab return_type) body
+      (* Add loop variable to symbol table temporarily for body type checking *)
+      let old_var = Hashtbl.find_opt symtab.vars var in
+      Hashtbl.add symtab.vars var TInteger;
+      List.iter (check_stmt symtab return_type) body;
+      (* Restore old value if it existed, otherwise remove *)
+      (match old_var with
+       | Some old_type -> Hashtbl.replace symtab.vars var old_type
+       | None -> Hashtbl.remove symtab.vars var)
 
   | SWriteln exprs | SWrite exprs ->
       List.iter (fun e -> ignore (check_expr symtab e)) exprs

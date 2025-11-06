@@ -2,11 +2,11 @@ program RecordReturn;
 
 type
   Point = record
-    x: integer;
-    y: integer;
+    x: Integer;
+    y: Integer;
   end;
 
-function make_point(a: integer; b: integer): Point;
+function make_point(a: Integer; b: Integer): Point;
 var
   p: Point;
 begin
@@ -15,7 +15,7 @@ begin
   return p
 end;
 
-function main(): integer;
+function main(): Integer;
 var
   pt: Point;
 begin

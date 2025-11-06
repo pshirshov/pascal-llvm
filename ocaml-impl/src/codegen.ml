@@ -98,7 +98,66 @@ let build_string_literal ctx str =
   let zero = const_int (i32_type ctx.llcontext) 0 in
   const_in_bounds_gep (lltype_of_type ctx TString) global [| zero; zero |]
 
-let rec codegen_expr ctx expr =
+(* Helper function to get pointer to an lvalue expression *)
+let rec codegen_lvalue_ptr ctx expr =
+  match expr with
+  | EVar name ->
+      (match Hashtbl.find_opt ctx.named_values name with
+       | Some ptr -> ptr
+       | None -> raise (Codegen_error (Printf.sprintf "Unknown variable: %s" name)))
+
+  | EArrayAccess (arr_expr, idx) ->
+      let arr_ptr = codegen_lvalue_ptr ctx arr_expr in
+      let idx_val = codegen_expr ctx idx in
+      let arr_type_resolved = resolve_type ctx (get_expr_type ctx arr_expr) in
+      let zero = const_int (i32_type ctx.llcontext) 0 in
+      build_in_bounds_gep (lltype_of_type ctx arr_type_resolved) arr_ptr
+        [| zero; idx_val |] "arrayptr" ctx.builder
+
+  | ERecordAccess (rec_expr, field) ->
+      let rec_ptr = codegen_lvalue_ptr ctx rec_expr in
+      (* Get the type of the record expression *)
+      let rec_type = resolve_type ctx (get_expr_type ctx rec_expr) in
+      (match rec_type with
+       | TRecord fields ->
+           let field_idx = match get_field_index fields field with
+             | Some i -> i
+             | None -> raise (Codegen_error (Printf.sprintf "Record has no field: %s" field))
+           in
+           let zero = const_int (i32_type ctx.llcontext) 0 in
+           let field_idx_val = const_int (i32_type ctx.llcontext) field_idx in
+           build_in_bounds_gep (lltype_of_type ctx rec_type) rec_ptr
+             [| zero; field_idx_val |] "fieldptr" ctx.builder
+       | _ -> raise (Codegen_error "Record access on non-record type"))
+
+  | EDeref ptr ->
+      codegen_expr ctx ptr
+
+  | _ -> raise (Codegen_error "Expression is not an lvalue")
+
+(* Helper to get the type of an expression *)
+and get_expr_type ctx expr =
+  match expr with
+  | EVar name ->
+      (match Hashtbl.find_opt ctx.var_types name with
+       | Some t -> resolve_type ctx t
+       | None -> raise (Codegen_error (Printf.sprintf "Unknown variable type: %s" name)))
+  | ERecordAccess (rec_expr, field) ->
+      let rec_type = resolve_type ctx (get_expr_type ctx rec_expr) in
+      (match rec_type with
+       | TRecord fields ->
+           (match List.find_opt (fun f -> f.field_name = field) fields with
+            | Some f -> resolve_type ctx f.field_type
+            | None -> raise (Codegen_error (Printf.sprintf "Field not found: %s" field)))
+       | _ -> raise (Codegen_error (Printf.sprintf "Not a record, got: %s" (match rec_type with TInteger -> "Integer" | _ -> "other"))))
+  | EArrayAccess (arr_expr, _) ->
+      let arr_type = resolve_type ctx (get_expr_type ctx arr_expr) in
+      (match arr_type with
+       | TArray (elem_type, _) -> resolve_type ctx elem_type
+       | _ -> raise (Codegen_error "Not an array"))
+  | _ -> raise (Codegen_error "Cannot determine type of expression")
+
+and codegen_expr ctx expr =
   match expr with
   | EInteger i -> const_int (i32_type ctx.llcontext) i
   | EReal f -> const_float (double_type ctx.llcontext) f
@@ -161,32 +220,10 @@ let rec codegen_expr ctx expr =
       let ptr = build_gep (type_of arr_val) arr_val [| idx_val |] "arraytmp" ctx.builder in
       build_load (element_type (type_of arr_val)) ptr "arrayload" ctx.builder
 
-  | ERecordAccess (rec_expr, field) ->
-      (* Get the variable name and its type for now we only support direct variable access *)
-      (match rec_expr with
-       | EVar var_name ->
-           let rec_type = match Hashtbl.find_opt ctx.var_types var_name with
-             | Some t -> resolve_type ctx t
-             | None -> raise (Codegen_error (Printf.sprintf "Unknown variable: %s" var_name))
-           in
-           (match rec_type with
-            | TRecord fields ->
-                let field_idx = match get_field_index fields field with
-                  | Some i -> i
-                  | None -> raise (Codegen_error (Printf.sprintf "Record has no field: %s" field))
-                in
-                let rec_ptr = match Hashtbl.find_opt ctx.named_values var_name with
-                  | Some ptr -> ptr
-                  | None -> raise (Codegen_error (Printf.sprintf "Unknown variable: %s" var_name))
-                in
-                let zero = const_int (i32_type ctx.llcontext) 0 in
-                let field_idx_val = const_int (i32_type ctx.llcontext) field_idx in
-                let field_ptr = build_in_bounds_gep (lltype_of_type ctx rec_type) rec_ptr
-                  [| zero; field_idx_val |] (Printf.sprintf "%s.%s" var_name field) ctx.builder in
-                let field_type = (List.nth fields field_idx).field_type in
-                build_load (lltype_of_type ctx field_type) field_ptr "fieldload" ctx.builder
-            | _ -> raise (Codegen_error "Record access on non-record type"))
-       | _ -> raise (Codegen_error "Complex record expressions not yet supported"))
+  | ERecordAccess _ ->
+      let field_ptr = codegen_lvalue_ptr ctx expr in
+      let field_type = get_expr_type ctx expr in
+      build_load (lltype_of_type ctx field_type) field_ptr "fieldload" ctx.builder
 
   | EDeref ptr ->
       let ptr_val = codegen_expr ctx ptr in
@@ -212,42 +249,7 @@ let rec codegen_expr ctx expr =
       _malloc_call  (* In opaque pointer mode, no bitcast needed *)
 
 let codegen_lvalue ctx expr =
-  match expr with
-  | EVar name ->
-      (match Hashtbl.find_opt ctx.named_values name with
-       | Some ptr -> ptr
-       | None -> raise (Codegen_error (Printf.sprintf "Unknown variable: %s" name)))
-  | EArrayAccess (arr, idx) ->
-      let arr_val = codegen_expr ctx arr in
-      let idx_val = codegen_expr ctx idx in
-      build_gep (type_of arr_val) arr_val [| idx_val |] "arraylval" ctx.builder
-  | ERecordAccess (rec_expr, field) ->
-      (* Get the variable name and its type *)
-      (match rec_expr with
-       | EVar var_name ->
-           let rec_type = match Hashtbl.find_opt ctx.var_types var_name with
-             | Some t -> resolve_type ctx t
-             | None -> raise (Codegen_error (Printf.sprintf "Unknown variable: %s" var_name))
-           in
-           (match rec_type with
-            | TRecord fields ->
-                let field_idx = match get_field_index fields field with
-                  | Some i -> i
-                  | None -> raise (Codegen_error (Printf.sprintf "Record has no field: %s" field))
-                in
-                let rec_ptr = match Hashtbl.find_opt ctx.named_values var_name with
-                  | Some ptr -> ptr
-                  | None -> raise (Codegen_error (Printf.sprintf "Unknown variable: %s" var_name))
-                in
-                let zero = const_int (i32_type ctx.llcontext) 0 in
-                let field_idx_val = const_int (i32_type ctx.llcontext) field_idx in
-                build_in_bounds_gep (lltype_of_type ctx rec_type) rec_ptr
-                  [| zero; field_idx_val |] (Printf.sprintf "%s.%s_ptr" var_name field) ctx.builder
-            | _ -> raise (Codegen_error "Record access on non-record type"))
-       | _ -> raise (Codegen_error "Complex record expressions not yet supported"))
-  | EDeref ptr ->
-      codegen_expr ctx ptr
-  | _ -> raise (Codegen_error "Invalid lvalue")
+  codegen_lvalue_ptr ctx expr
 
 let rec codegen_stmt ctx printf_func scanf_func stmt =
   match stmt with
@@ -277,6 +279,7 @@ let rec codegen_stmt ctx printf_func scanf_func stmt =
       position_at_end then_bb ctx.builder;
       List.iter (codegen_stmt ctx printf_func scanf_func) then_stmts;
       let new_then_bb = insertion_block ctx.builder in
+      let then_terminated = block_terminator new_then_bb <> None in
 
       let else_bb = append_block ctx.llcontext "else" the_function in
       position_at_end else_bb ctx.builder;
@@ -284,17 +287,28 @@ let rec codegen_stmt ctx printf_func scanf_func stmt =
        | Some stmts -> List.iter (codegen_stmt ctx printf_func scanf_func) stmts
        | None -> ());
       let new_else_bb = insertion_block ctx.builder in
+      let else_terminated = block_terminator new_else_bb <> None in
 
       let merge_bb = append_block ctx.llcontext "ifcont" the_function in
-      position_at_end new_then_bb ctx.builder;
-      ignore (build_br merge_bb ctx.builder);
-      position_at_end new_else_bb ctx.builder;
-      ignore (build_br merge_bb ctx.builder);
+
+      (* Only add branch if block doesn't already have a terminator *)
+      if not then_terminated then begin
+        position_at_end new_then_bb ctx.builder;
+        ignore (build_br merge_bb ctx.builder)
+      end;
+
+      if not else_terminated then begin
+        position_at_end new_else_bb ctx.builder;
+        ignore (build_br merge_bb ctx.builder)
+      end;
 
       position_at_end start_bb ctx.builder;
       ignore (build_cond_br cond_val then_bb else_bb ctx.builder);
 
-      position_at_end merge_bb ctx.builder
+      position_at_end merge_bb ctx.builder;
+      (* If both branches are terminated, the merge block is unreachable *)
+      if then_terminated && else_terminated then
+        ignore (build_unreachable ctx.builder)
 
   | SWhile (cond, body) ->
       let start_bb = insertion_block ctx.builder in
@@ -319,9 +333,15 @@ let rec codegen_stmt ctx printf_func scanf_func stmt =
 
   | SFor (var, start, stop, body) ->
       let start_val = codegen_expr ctx start in
+      (* Check if variable exists, if not allocate it for the loop *)
       let var_ptr = match Hashtbl.find_opt ctx.named_values var with
         | Some ptr -> ptr
-        | None -> raise (Codegen_error (Printf.sprintf "Unknown loop variable: %s" var))
+        | None ->
+            (* Allocate loop variable *)
+            let alloca = build_alloca (i32_type ctx.llcontext) var ctx.builder in
+            Hashtbl.add ctx.named_values var alloca;
+            Hashtbl.add ctx.var_types var TInteger;
+            alloca
       in
       ignore (build_store start_val var_ptr ctx.builder);
 
