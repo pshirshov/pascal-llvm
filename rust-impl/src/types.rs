@@ -225,8 +225,16 @@ fn check_stmt(
     match stmt {
         Stmt::SVarDecl(name, var_type, init) => {
             let resolved = resolve_type(symtab, var_type)?;
-            let init_type = check_expr(symtab, init)?;
-            if !types_equal(&resolved, &init_type) {
+            // Allow EInteger(0) as default initializer for any type
+            let init_valid = match init {
+                Expr::EInteger(0) => true, // Default initialization
+                _ => {
+                    let init_type = check_expr(symtab, init)?;
+                    let init_type_resolved = resolve_type(symtab, &init_type)?;
+                    types_equal(&resolved, &init_type_resolved)
+                }
+            };
+            if !init_valid {
                 return Err(TypeError(format!(
                     "Variable {}: initializer type mismatch",
                     name

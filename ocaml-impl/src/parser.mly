@@ -8,8 +8,8 @@ open Ast
 %token <string> STRING
 %token <string> IDENT
 %token TRUE FALSE
-%token PROGRAM VAR VAL TYPE DEF FUNCTION PROCEDURE BEGIN END
-%token IF THEN ELSE WHILE DO FOR TO DOWNTO OF ARRAY RECORD
+%token PROGRAM VAR VAL TYPE DEF END
+%token IF ELSE WHILE FOR TO OF ARRAY RECORD
 %token TINTEGER TREAL TBOOLEAN TCHAR TSTRING
 %token AND OR NOT DIV MOD
 %token WRITELN WRITE READLN NEW RETURN
@@ -40,13 +40,9 @@ program:
 
 declaration:
   | TYPE; type_decls=nonempty_list(type_declaration)
-    { DType (List.hd type_decls) }  (* Simplified for single type *)
+    { DType (List.hd type_decls) }
   | VAR; var_decls=nonempty_list(var_declaration)
-    { DVar (List.hd var_decls) }  (* Simplified for single var *)
-  | f=function_declaration
-    { DFunc f }
-  | p=procedure_declaration
-    { DFunc p }
+    { DVar (List.hd var_decls) }
   | d=def_declaration
     { DFunc d }
 
@@ -60,22 +56,6 @@ var_declaration:
   | name=IDENT; COLON; t=type_expr; ASSIGN; init=expr; SEMICOLON
     { { var_name = name; var_type = t; var_init = Some init } }
 
-function_declaration:
-  | FUNCTION; name=IDENT; LPAREN; params=separated_list(SEMICOLON, param); RPAREN;
-    COLON; ret=type_expr; SEMICOLON;
-    vars=list(VAR; v=nonempty_list(var_declaration) { v });
-    BEGIN; body=separated_list(SEMICOLON, statement); END; SEMICOLON
-    { { func_name = name; params; return_type = Some ret;
-        local_vars = List.flatten vars; body } }
-
-procedure_declaration:
-  | PROCEDURE; name=IDENT; LPAREN; params=separated_list(SEMICOLON, param); RPAREN; SEMICOLON;
-    vars=list(VAR; v=nonempty_list(var_declaration) { v });
-    BEGIN; body=separated_list(SEMICOLON, statement); END; SEMICOLON
-    { { func_name = name; params; return_type = None;
-        local_vars = List.flatten vars; body } }
-
-(* Scala-like def syntax *)
 def_declaration:
   | DEF; name=IDENT; LPAREN; params=separated_list(COMMA, def_param); RPAREN;
     COLON; ret=type_expr; EQ; body=brace_block
@@ -87,12 +67,6 @@ def_declaration:
         local_vars = []; body } }
 
 def_param:
-  | name=IDENT; COLON; t=type_expr
-    { { param_name = name; param_type = t; is_var = false } }
-  | VAR; name=IDENT; COLON; t=type_expr
-    { { param_name = name; param_type = t; is_var = true } }
-
-param:
   | name=IDENT; COLON; t=type_expr
     { { param_name = name; param_type = t; is_var = false } }
   | VAR; name=IDENT; COLON; t=type_expr
@@ -138,28 +112,20 @@ statement:
   | VAR; name=IDENT; COLON; t=type_expr; assign_op; init=expr
     { SVarDecl (name, t, init) }
   | VAR; name=IDENT; COLON; t=type_expr
-    { SVarDecl (name, t, EInteger 0) }  (* Default initialization *)
+    { SVarDecl (name, t, EInteger 0) }
   | VAL; name=IDENT; COLON; t=type_expr; EQ; init=expr
     { SValDecl (name, t, init) }
   | lval=lvalue; assign_op; rval=expr
     { SAssign (lval, rval) }
   | name=IDENT; LPAREN; args=separated_list(COMMA, expr); RPAREN
     { SCall (name, args) }
-  | IF; cond=expr; THEN; then_body=statement_block; ELSE; else_body=statement_block
-    { SIf (cond, then_body, Some else_body) }
-  | IF; cond=expr; THEN; then_body=statement_block
-    { SIf (cond, then_body, None) }
   | IF; LPAREN; cond=expr; RPAREN; then_body=brace_block; ELSE; else_body=brace_block
     { SIf (cond, then_body, Some else_body) }
   | IF; LPAREN; cond=expr; RPAREN; then_body=brace_block
     { SIf (cond, then_body, None) }
   | WHILE; LPAREN; cond=expr; RPAREN; body=brace_block
     { SWhile (cond, body) }
-  | WHILE; cond=expr; DO; body=statement_block
-    { SWhile (cond, body) }
   | FOR; LPAREN; var=IDENT; assign_op; start=expr; TO; stop=expr; RPAREN; body=brace_block
-    { SFor (var, start, stop, body) }
-  | FOR; var=IDENT; assign_op; start=expr; TO; stop=expr; DO; body=statement_block
     { SFor (var, start, stop, body) }
   | WRITELN; LPAREN; args=separated_list(COMMA, expr); RPAREN
     { SWriteln args }
@@ -171,8 +137,6 @@ statement:
     { SReturn (Some e) }
   | RETURN
     { SReturn None }
-  | BEGIN; stmts=separated_list(SEMICOLON, statement); END
-    { SBlock stmts }
   | brace_block=brace_block
     { SBlock brace_block }
 
@@ -190,12 +154,6 @@ lvalue:
     { ERecordAccess (e, field) }
   | e=lvalue; CARET
     { EDeref e }
-
-statement_block:
-  | BEGIN; stmts=separated_list(SEMICOLON, statement); END
-    { stmts }
-  | s=statement
-    { [s] }
 
 (* Scala-like brace blocks with optional semicolons *)
 brace_block:

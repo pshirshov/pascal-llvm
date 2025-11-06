@@ -139,8 +139,14 @@ object TypeChecker:
   def checkStmt(symtab: SymbolTable, returnType: Option[TypeExpr], stmt: Stmt): Unit = stmt match
     case SVarDecl(name, varType, init) =>
       val resolved = resolveType(symtab, varType)
-      val initType = checkExpr(symtab, init)
-      if !typesEqual(resolved, initType) then
+      // Allow EInteger(0) as default initializer for any type
+      val initValid = init match
+        case EInteger(0) => true  // Default initialization
+        case _ =>
+          val initType = checkExpr(symtab, init)
+          val initTypeResolved = resolveType(symtab, initType)
+          typesEqual(resolved, initTypeResolved)
+      if !initValid then
         throw TypeError(s"Variable $name: initializer type mismatch")
       symtab.vars(name) = resolved
 

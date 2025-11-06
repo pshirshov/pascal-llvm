@@ -13,13 +13,14 @@ object Parser:
 
   // Whitespace and comments
   def wsChars[$: P]: P[Unit] = P(CharsWhileIn(" \t\r\n"))
-  def comment[$: P]: P[Unit] = P("(*" ~ (!"*)" ~ AnyChar).rep ~ "*)")
-  def ws[$: P]: P[Unit] = P((wsChars | comment).rep)
+  def blockComment[$: P]: P[Unit] = P("(*" ~ (!"*)" ~ AnyChar).rep ~ "*)")
+  def lineComment[$: P]: P[Unit] = P("//" ~ (!"\n" ~ AnyChar).rep)
+  def ws[$: P]: P[Unit] = P((wsChars | blockComment | lineComment).rep)
 
   // Keywords
   val keywords = Set(
-    "program", "begin", "end", "var", "val", "def", "function", "procedure",
-    "if", "then", "else", "while", "do", "for", "to", "downto",
+    "program", "end", "var", "val", "def",
+    "if", "else", "while", "for", "to",
     "return", "write", "writeln", "readln", "new",
     "integer", "real", "boolean", "char", "string",
     "Integer", "Real", "Boolean", "Char", "String",
@@ -165,27 +166,17 @@ object Parser:
   ).map((name, args) => SCall(name, args.toList))
 
   def ifStmt[$: P]: P[Stmt] = P(
-    // New syntax: if (cond) { } else { }
-    ("if" ~ ws ~ "(" ~ ws ~ expr ~ ws ~ ")" ~ ws ~ braceBlock ~
-     (ws ~ "else" ~ ws ~ braceBlock).?).map((cond, thenBranch, elseBranch) => SIf(cond, thenBranch, elseBranch)) |
-    // Old syntax: if cond then ... else ...
-    ("if" ~ ws ~ expr ~ ws ~ "then" ~ ws ~ stmtBlock ~
-     (ws ~ "else" ~ ws ~ stmtBlock).?).map((cond, thenBranch, elseBranch) => SIf(cond, thenBranch, elseBranch))
-  )
+    "if" ~ ws ~ "(" ~ ws ~ expr ~ ws ~ ")" ~ ws ~ braceBlock ~
+    (ws ~ "else" ~ ws ~ braceBlock).?
+  ).map((cond, thenBranch, elseBranch) => SIf(cond, thenBranch, elseBranch))
 
   def whileStmt[$: P]: P[Stmt] = P(
-    // New syntax: while (cond) { }
-    ("while" ~ ws ~ "(" ~ ws ~ expr ~ ws ~ ")" ~ ws ~ braceBlock).map((cond, body) => SWhile(cond, body)) |
-    // Old syntax: while cond do ...
-    ("while" ~ ws ~ expr ~ ws ~ "do" ~ ws ~ stmtBlock).map((cond, body) => SWhile(cond, body))
-  )
+    "while" ~ ws ~ "(" ~ ws ~ expr ~ ws ~ ")" ~ ws ~ braceBlock
+  ).map((cond, body) => SWhile(cond, body))
 
   def forStmt[$: P]: P[Stmt] = P(
-    // New syntax: for (var = start to end) { }
-    ("for" ~ ws ~ "(" ~ ws ~ identifier ~ ws ~ (":=" | "=") ~ ws ~ expr ~ ws ~ "to" ~ ws ~ expr ~ ws ~ ")" ~ ws ~ braceBlock).map((varName, from, to, body) => SFor(varName, from, to, body)) |
-    // Old syntax: for var := start to end do ...
-    ("for" ~ ws ~ identifier ~ ws ~ ":=" ~ ws ~ expr ~ ws ~ "to" ~ ws ~ expr ~ ws ~ "do" ~ ws ~ stmtBlock).map((varName, from, to, body) => SFor(varName, from, to, body))
-  )
+    "for" ~ ws ~ "(" ~ ws ~ identifier ~ ws ~ (":=" | "=") ~ ws ~ expr ~ ws ~ "to" ~ ws ~ expr ~ ws ~ ")" ~ ws ~ braceBlock
+  ).map((varName, from, to, body) => SFor(varName, from, to, body))
 
   def writelnStmt[$: P]: P[Stmt] = P(
     "writeln" ~ ws ~ "(" ~ ws ~ expr.rep(sep = ws ~ "," ~ ws) ~ ws ~ ")"
@@ -204,8 +195,8 @@ object Parser:
   ).map(SReturn.apply)
 
   def varDeclStmt[$: P]: P[Stmt] = P(
-    "var" ~ ws ~ identifier ~ ws ~ ":" ~ ws ~ typeExpr ~ ws ~ (":=" | "=") ~ ws ~ expr
-  ).map((name, tpe, init) => SVarDecl(name, tpe, init))
+    "var" ~ ws ~ identifier ~ ws ~ ":" ~ ws ~ typeExpr ~ (ws ~ (":=" | "=") ~ ws ~ expr).?
+  ).map((name, tpe, init) => SVarDecl(name, tpe, init.getOrElse(EInteger(0))))
 
   def valDeclStmt[$: P]: P[Stmt] = P(
     "val" ~ ws ~ identifier ~ ws ~ ":" ~ ws ~ typeExpr ~ ws ~ "=" ~ ws ~ expr
@@ -227,42 +218,15 @@ object Parser:
 
   def stmt[$: P]: P[Stmt] = P(
     ifStmt | whileStmt | forStmt |
-    ("begin" ~ ws ~ stmt.rep(sep = ws ~ ";" ~ ws) ~ ws ~ "end").map(stmts => SBlock(stmts.toList)) |
     braceBlock.map(stmts => SBlock(stmts)) |
     simpleStmt
   )
 
-  def stmtBlock[$: P]: P[List[Stmt]] = P(
-    ("begin" ~ ws ~ stmt.rep(sep = ws ~ ";" ~ ws) ~ ws ~ "end").map(_.toList) |
-    braceBlock |
-    stmt.map(List(_))
-  )
 
   // Declarations
   def varDecl[$: P]: P[VarDecl] = P(
     identifier ~ ws ~ ":" ~ ws ~ typeExpr ~ (ws ~ ":=" ~ ws ~ expr).?
   ).map((name, tpe, init) => VarDecl(name, tpe, init))
-
-  def param[$: P]: P[Param] = P(
-    ("var" ~ ws).!.? ~ identifier ~ ws ~ ":" ~ ws ~ typeExpr
-  ).map((isVar, name, tpe) => Param(name, tpe, isVar.isDefined))
-
-  def funcDecl[$: P]: P[FuncDecl] = P(
-    "function" ~ ws ~ identifier ~ ws ~
-    "(" ~ ws ~ param.rep(sep = ws ~ ";" ~ ws) ~ ws ~ ")" ~ ws ~
-    ":" ~ ws ~ typeExpr ~ ws ~ ";" ~ ws ~
-    ((ws ~ "var" ~ ws ~ varDecl.rep(sep = ws ~ ";" ~ ws, min = 1) ~ ws ~ ";").map(_.toList) | Pass.map(_ => Nil)) ~ ws ~
-    "begin" ~ ws ~ stmt.rep(sep = ws ~ ";" ~ ws) ~ ws ~ "end" ~ ws ~ ";"
-  ).map((name, params, retType, localVars, body) =>
-    FuncDecl(name, params.toList, Some(retType), localVars, body.toList))
-
-  def procedureDecl[$: P]: P[FuncDecl] = P(
-    "procedure" ~ ws ~ identifier ~ ws ~
-    "(" ~ ws ~ param.rep(sep = ws ~ ";" ~ ws) ~ ws ~ ")" ~ ws ~ ";" ~ ws ~
-    ((ws ~ "var" ~ ws ~ varDecl.rep(sep = ws ~ ";" ~ ws, min = 1) ~ ws ~ ";").map(_.toList) | Pass.map(_ => Nil)) ~ ws ~
-    "begin" ~ ws ~ stmt.rep(sep = ws ~ ";" ~ ws) ~ ws ~ "end" ~ ws ~ ";"
-  ).map((name, params, localVars, body) =>
-    FuncDecl(name, params.toList, None, localVars, body.toList))
 
   // Def-style declaration (Scala-like syntax)
   def defParam[$: P]: P[Param] = P(
@@ -289,8 +253,6 @@ object Parser:
   def declaration[$: P]: P[Declaration] = P(
     typeDecl.map(DType.apply) |
     defDecl.map(DFunc.apply) |
-    funcDecl.map(DFunc.apply) |
-    procedureDecl.map(DFunc.apply) |
     ("var" ~ ws ~ varDecl.rep(sep = ws ~ ";" ~ ws)).map(vars =>
       vars.map(v => DVar(v)).toList
     ).flatMap(decls => Pass.map(_ => decls.head)) // Parse first, handle multiple separately
@@ -310,28 +272,17 @@ object Parser:
     (ws ~
      (programVarDecls.map(vars => vars.map(DVar.apply)) |
       programTypeDecls.map(types => types.map(DType.apply)) |
-      defDecl.map(dd => List(DFunc(dd))) |
-      funcDecl.map(fd => List(DFunc(fd))) |
-      procedureDecl.map(pd => List(DFunc(pd)))
+      defDecl.map(dd => List(DFunc(dd)))
      )
     ).rep
   ).map(_.flatten.toList)
 
-  // Main program block (without function declarations)
-  def mainBlock[$: P]: P[List[Stmt]] = P(
-    "begin" ~ ws ~ stmt.rep(sep = ws ~ ";" ~ ws) ~ ws ~ "end"
-  ).map(_.toList)
-
   def program[$: P]: P[Program] = P(
     ws ~ "program" ~ ws ~ identifier ~ ws ~ ";" ~ ws ~
     programDeclarations ~ ws ~
-    (mainBlock.map(stmts =>
-      // Wrap main block in a main() function
-      List(DFunc(FuncDecl("main", Nil, Some(TInteger), Nil, stmts :+ SReturn(Some(EInteger(0))))))
-    ) | Pass.map(_ => Nil)) ~ ws ~
     "." ~ ws
-  ).map { case (name, decls, mainFunc) =>
-    Program(name, decls ++ mainFunc)
+  ).map { case (name, decls) =>
+    Program(name, decls)
   }
 
   def parseProgram(input: String): Either[String, Program] =

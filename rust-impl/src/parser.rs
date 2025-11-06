@@ -105,7 +105,6 @@ impl Parser {
     fn parse_declaration(&mut self) -> Result<Declaration, ParseError> {
         match &self.current_token {
             Token::Type => self.parse_type_decl(),
-            Token::Function | Token::Procedure => self.parse_func_decl(),
             Token::Def => self.parse_def_decl(),
             _ => Err(ParseError {
                 message: format!("Expected declaration, got {:?}", self.current_token),
@@ -148,84 +147,6 @@ impl Parser {
         }))
     }
 
-    fn parse_func_decl(&mut self) -> Result<Declaration, ParseError> {
-        let is_function = self.current_token == Token::Function;
-        self.advance();
-
-        let func_name = self.expect_ident()?;
-        self.expect(Token::LParen)?;
-
-        let mut params = Vec::new();
-        if self.current_token != Token::RParen {
-            loop {
-                let param_name = self.expect_ident()?;
-                self.expect(Token::Colon)?;
-                let param_type = self.parse_type_expr()?;
-                params.push(Param {
-                    param_name,
-                    param_type,
-                });
-
-                if self.current_token == Token::Semicolon {
-                    self.advance();
-                } else {
-                    break;
-                }
-            }
-        }
-
-        self.expect(Token::RParen)?;
-
-        let return_type = if is_function {
-            self.expect(Token::Colon)?;
-            Some(self.parse_type_expr()?)
-        } else {
-            None
-        };
-
-        self.expect(Token::Semicolon)?;
-
-        // Parse local variable declarations
-        let mut local_vars = Vec::new();
-        if self.current_token == Token::Var {
-            self.advance(); // consume 'var' keyword
-            // Parse multiple variable declarations until we hit 'begin'
-            while matches!(self.current_token, Token::Ident(_)) {
-                let var_name = self.expect_ident()?;
-                self.expect(Token::Colon)?;
-                let var_type = self.parse_type_expr()?;
-
-                let var_init = if self.current_token == Token::Assign {
-                    self.advance();
-                    Some(self.parse_expr()?)
-                } else {
-                    None
-                };
-
-                self.expect(Token::Semicolon)?;
-
-                local_vars.push(VarDecl {
-                    var_name,
-                    var_type,
-                    var_init,
-                });
-            }
-        }
-
-        // Parse body
-        self.expect(Token::Begin)?;
-        let body = self.parse_stmt_list()?;
-        self.expect(Token::End)?;
-        self.expect(Token::Semicolon)?;
-
-        Ok(Declaration::DFunc(FuncDecl {
-            func_name,
-            params,
-            return_type,
-            local_vars,
-            body,
-        }))
-    }
 
     fn parse_def_decl(&mut self) -> Result<Declaration, ParseError> {
         self.expect(Token::Def)?;
@@ -264,16 +185,8 @@ impl Parser {
 
         self.expect(Token::Eq)?;
 
-        // Parse body - could be brace block or old-style begin/end
-        let body = if self.current_token == Token::LBrace {
-            self.parse_brace_block()?
-        } else {
-            self.expect(Token::Begin)?;
-            let stmts = self.parse_stmt_list()?;
-            self.expect(Token::End)?;
-            self.expect(Token::Semicolon)?;
-            stmts
-        };
+        // Parse body - only brace blocks
+        let body = self.parse_brace_block()?;
 
         Ok(Declaration::DFunc(FuncDecl {
             func_name,
@@ -373,19 +286,6 @@ impl Parser {
         }
     }
 
-    fn parse_stmt_list(&mut self) -> Result<Vec<Stmt>, ParseError> {
-        let mut stmts = Vec::new();
-        while !matches!(
-            self.current_token,
-            Token::End | Token::Else | Token::Eof
-        ) {
-            stmts.push(self.parse_stmt()?);
-            if self.current_token == Token::Semicolon {
-                self.advance();
-            }
-        }
-        Ok(stmts)
-    }
 
     fn parse_stmt(&mut self) -> Result<Stmt, ParseError> {
         match &self.current_token {
@@ -398,7 +298,6 @@ impl Parser {
             Token::Write => self.parse_write_stmt(),
             Token::Readln => self.parse_readln_stmt(),
             Token::Return => self.parse_return_stmt(),
-            Token::Begin => self.parse_block_stmt(),
             _ => self.parse_assign_or_call_stmt(),
         }
     }
@@ -431,45 +330,15 @@ impl Parser {
 
     fn parse_if_stmt(&mut self) -> Result<Stmt, ParseError> {
         self.expect(Token::If)?;
-
-        // Support both old (if cond then) and new (if (cond)) syntax
-        let has_paren = self.current_token == Token::LParen;
-        if has_paren {
-            self.advance();
-        }
-
+        self.expect(Token::LParen)?;
         let cond = self.parse_expr()?;
+        self.expect(Token::RParen)?;
 
-        if has_paren {
-            self.expect(Token::RParen)?;
-        } else {
-            self.expect(Token::Then)?;
-        }
-
-        // Parse then block - could be begin/end, braces, or single statement
-        let then_stmts = if self.current_token == Token::LBrace {
-            self.parse_brace_block()?
-        } else if self.current_token == Token::Begin {
-            self.advance();
-            let stmts = self.parse_stmt_list()?;
-            self.expect(Token::End)?;
-            stmts
-        } else {
-            vec![self.parse_stmt()?]
-        };
+        let then_stmts = self.parse_brace_block()?;
 
         let else_stmts = if self.current_token == Token::Else {
             self.advance();
-            if self.current_token == Token::LBrace {
-                Some(self.parse_brace_block()?)
-            } else if self.current_token == Token::Begin {
-                self.advance();
-                let stmts = self.parse_stmt_list()?;
-                self.expect(Token::End)?;
-                Some(stmts)
-            } else {
-                Some(vec![self.parse_stmt()?])
-            }
+            Some(self.parse_brace_block()?)
         } else {
             None
         };
@@ -479,44 +348,16 @@ impl Parser {
 
     fn parse_while_stmt(&mut self) -> Result<Stmt, ParseError> {
         self.expect(Token::While)?;
-
-        // Support both old (while cond do) and new (while (cond)) syntax
-        let has_paren = self.current_token == Token::LParen;
-        if has_paren {
-            self.advance();
-        }
-
+        self.expect(Token::LParen)?;
         let cond = self.parse_expr()?;
-
-        if has_paren {
-            self.expect(Token::RParen)?;
-        } else {
-            self.expect(Token::Do)?;
-        }
-
-        // Parse body - could be begin/end, braces, or single statement
-        let body = if self.current_token == Token::LBrace {
-            self.parse_brace_block()?
-        } else if self.current_token == Token::Begin {
-            self.advance();
-            let stmts = self.parse_stmt_list()?;
-            self.expect(Token::End)?;
-            stmts
-        } else {
-            vec![self.parse_stmt()?]
-        };
-
+        self.expect(Token::RParen)?;
+        let body = self.parse_brace_block()?;
         Ok(Stmt::SWhile(cond, body))
     }
 
     fn parse_for_stmt(&mut self) -> Result<Stmt, ParseError> {
         self.expect(Token::For)?;
-
-        // Support both old (for i := 1 to n do) and new (for (i = 1 to n)) syntax
-        let has_paren = self.current_token == Token::LParen;
-        if has_paren {
-            self.advance();
-        }
+        self.expect(Token::LParen)?;
 
         let var = self.expect_ident()?;
         // Accept both := and =
@@ -529,43 +370,12 @@ impl Parser {
         }
         let start = self.parse_expr()?;
 
-        let _ascending = match self.current_token {
-            Token::To => {
-                self.advance();
-                true
-            }
-            Token::Downto => {
-                self.advance();
-                false
-            }
-            _ => {
-                return Err(ParseError {
-                    message: "Expected 'to' or 'downto'".to_string(),
-                })
-            }
-        };
-
+        self.expect(Token::To)?;
         let end = self.parse_expr()?;
 
-        if has_paren {
-            self.expect(Token::RParen)?;
-        } else {
-            self.expect(Token::Do)?;
-        }
+        self.expect(Token::RParen)?;
+        let body = self.parse_brace_block()?;
 
-        // Parse body - could be braces, begin/end, or single statement
-        let body = if self.current_token == Token::LBrace {
-            self.parse_brace_block()?
-        } else if self.current_token == Token::Begin {
-            self.advance();
-            let stmts = self.parse_stmt_list()?;
-            self.expect(Token::End)?;
-            stmts
-        } else {
-            vec![self.parse_stmt()?]
-        };
-
-        // For downto loops, we'll store the end expr as-is and handle it in codegen
         Ok(Stmt::SFor(var, start, end, body))
     }
 
@@ -635,12 +445,6 @@ impl Parser {
         }
     }
 
-    fn parse_block_stmt(&mut self) -> Result<Stmt, ParseError> {
-        self.expect(Token::Begin)?;
-        let stmts = self.parse_stmt_list()?;
-        self.expect(Token::End)?;
-        Ok(Stmt::SBlock(stmts))
-    }
 
     fn parse_assign_or_call_stmt(&mut self) -> Result<Stmt, ParseError> {
         // Parse an lvalue (identifier with possible array/record access)

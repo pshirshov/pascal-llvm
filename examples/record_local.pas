@@ -6,14 +6,12 @@ type
     y: Integer;
   end;
 
-function test(): Integer;
-var
-  p: Point;
-begin
-  p.x := 10;
-  p.y := 20;
+def test(): Integer = {
+  var p: Point
+  p.x = 10
+  p.y = 20
   return p.x + p.y
-end;
+}
 
 def main(): Integer = {
   var result: Integer = test()

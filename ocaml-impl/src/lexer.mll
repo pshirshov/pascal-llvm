@@ -11,30 +11,19 @@ let () =
       "val", VAL;
       "type", TYPE;
       "def", DEF;
-      "function", FUNCTION;  (* Keep for backward compatibility *)
-      "procedure", PROCEDURE;  (* Keep for backward compatibility *)
-      "begin", BEGIN;  (* Keep for backward compatibility *)
-      "end", END;  (* Keep for backward compatibility *)
       "if", IF;
-      "then", THEN;
       "else", ELSE;
       "while", WHILE;
-      "do", DO;
       "for", FOR;
       "to", TO;
-      "downto", DOWNTO;
       "of", OF;
       "array", ARRAY;
       "record", RECORD;
-      "Integer", TINTEGER;
-      "integer", TINTEGER;  (* Keep lowercase for backward compatibility *)
-      "Real", TREAL;
+      "end", END;  (* Still needed for record end *)
+      "integer", TINTEGER;
       "real", TREAL;
-      "Boolean", TBOOLEAN;
       "boolean", TBOOLEAN;
-      "Char", TCHAR;
       "char", TCHAR;
-      "String", TSTRING;
       "string", TSTRING;
       "true", TRUE;
       "false", FALSE;

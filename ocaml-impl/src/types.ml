@@ -133,8 +133,15 @@ let rec check_stmt symtab return_type stmt =
   match stmt with
   | SVarDecl (name, var_type, init) ->
       let resolved = resolve_type symtab var_type in
-      let init_type = check_expr symtab init in
-      if not (types_equal resolved init_type) then
+      (* Allow EInteger 0 as default initializer for any type *)
+      let init_valid = match init with
+        | EInteger 0 -> true  (* Default initialization *)
+        | _ ->
+            let init_type = check_expr symtab init in
+            let init_type_resolved = resolve_type symtab init_type in
+            types_equal resolved init_type_resolved
+      in
+      if not init_valid then
         raise (Type_error (Printf.sprintf "Variable %s: initializer type mismatch" name));
       Hashtbl.add symtab.vars name resolved
 
